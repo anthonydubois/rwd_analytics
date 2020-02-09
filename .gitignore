@@ -3,4 +3,4 @@ __pycache__/
 *.py[cod]
 
 .DS_Store
-.ipybn_checkpoints/
+ipynb_checkpoints/
