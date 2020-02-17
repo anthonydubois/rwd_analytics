@@ -47,7 +47,6 @@ class CohortBuilder():
         return tmp
 
     def __attributes_selection(self, tmp, criteria):
-        print(tmp)
         attributes = criteria['attributes']
         if len(attributes) != 0:
             for attribute in attributes:
