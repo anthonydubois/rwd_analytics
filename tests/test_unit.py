@@ -3,23 +3,8 @@ import dask.dataframe as dd
 import pytest
 
 from rwd_analytics.cohort import CohortBuilder
-from rwd_analytics.features_selection import FeaturesSelection
-
-
-cohort = pd.DataFrame({
-    'cohort_definition_id':[1, 1, 1, 1, 1, 2, 2, 2],
-    'subject_id':[1, 2, 3, 4, 5, 1, 2, 3],
-    'cohort_start_date':[
-        pd.to_datetime('2018-01-01'),
-        pd.to_datetime('2018-01-01'),
-        pd.to_datetime('2018-01-01'),
-        pd.to_datetime('2018-01-01'),
-        pd.to_datetime('2018-01-01'),
-        pd.to_datetime('2019-01-01'),
-        pd.to_datetime('2018-05-01'),
-        pd.to_datetime('2018-03-01'),
-    ]
-})
+from rwd_analytics.treatment_line import EraCalculation
+from rwd_analytics.features_selection import FeaturesSelection, time_at_risk, get_features_scores
 
 person = pd.DataFrame({
     'person_id':[1, 2, 3, 4, 5],
@@ -36,6 +21,17 @@ condition_occurrence = pd.DataFrame({
         pd.to_datetime('2017-12-10'),
         pd.to_datetime('2017-12-10'),
         pd.to_datetime('2017-12-10'),
+    ]
+})
+observation_period = pd.DataFrame({
+    'person_id':[1, 2],
+    'observation_period_start_date':[
+        pd.to_datetime('2015-01-01'),
+        pd.to_datetime('2017-12-01')
+    ],
+    'observation_period_end_date':[
+        pd.to_datetime('2019-01-01'),
+        pd.to_datetime('2018-02-01')
     ]
 })
 drug_exposure = pd.DataFrame({
@@ -57,10 +53,11 @@ visit_occurrence = pd.DataFrame({
         pd.to_datetime('2017-12-10')
     ]
 })
-visit_occurrence = dd.from_pandas(visit_occurrence, npartitions=1)
-person = dd.from_pandas(person, npartitions=1)
-condition_occurrence = dd.from_pandas(condition_occurrence, npartitions=1)
-drug_exposure = dd.from_pandas(drug_exposure, npartitions=1)
+visit_occurrence = dd.from_pandas(visit_occurrence, npartitions=1).set_index('person_id')
+person = dd.from_pandas(person, npartitions=1).set_index('person_id')
+condition_occurrence = dd.from_pandas(condition_occurrence, npartitions=1).set_index('person_id')
+drug_exposure = dd.from_pandas(drug_exposure, npartitions=1).set_index('person_id')
+observation_period = dd.from_pandas(observation_period, npartitions=1).set_index('person_id')
 measurement = pd.DataFrame()
 procedure = pd.DataFrame()
 measurement = dd.from_pandas(measurement, npartitions=1)
@@ -68,7 +65,7 @@ procedure = dd.from_pandas(procedure, npartitions=1)
 
 
 class TestCohort():
-    def test_cohort_builder_gender(self):
+    def test_gender(self):
         cohort_criteria = {
             'criteria':[
                 {
@@ -81,7 +78,8 @@ class TestCohort():
                 }
             ]
         }
-        output = CohortBuilder(cohort_criteria, drug_exposure, condition_occurrence, person)()
+        output = CohortBuilder(cohort_criteria, drug_exposure, condition_occurrence, person, observation_period)()
+        output = output.reset_index(drop=True)
         expected = pd.DataFrame({
             'person_id':[2, 4, 5],
             'cohort_start_date':[
@@ -92,7 +90,7 @@ class TestCohort():
         })
         pd.testing.assert_frame_equal(output, expected)
 
-    def test_cohort_builder_condition(self):
+    def test_condition(self):
         cohort_criteria = {
             'criteria':[
                 {
@@ -105,7 +103,7 @@ class TestCohort():
                 }
             ]
         }
-        output = CohortBuilder(cohort_criteria, drug_exposure, condition_occurrence, person)()
+        output = CohortBuilder(cohort_criteria, drug_exposure, condition_occurrence, person, observation_period)()
         expected = pd.DataFrame({
             'person_id':[1],
             'cohort_start_date':[
@@ -114,9 +112,177 @@ class TestCohort():
         })
         pd.testing.assert_frame_equal(output, expected)
 
+    def test_multiple_criteria(self):
+        cohort_criteria = {
+            'criteria':[
+                {
+                    'concept_type':'gender',
+                    'concept_id':[8507],
+                    'excluded':0,
+                    'descendant':0,
+                    'mapped':0,
+                    'attributes':[]
+                },
+                {
+                    'concept_type':'condition',
+                    'concept_id':[44831230],
+                    'excluded':0,
+                    'descendant':0,
+                    'mapped':0,
+                    'attributes':[]
+                }
+            ]
+        }
+        output = CohortBuilder(cohort_criteria, drug_exposure, condition_occurrence, person, observation_period)()
+        expected = pd.DataFrame({
+            'person_id':[2],
+            'cohort_start_date':[
+                pd.to_datetime('2017-12-10')
+            ]
+        })
+        pd.testing.assert_frame_equal(output, expected)
+
+    def test_year_of_birth(self):
+        cohort_criteria = {
+            'criteria':[
+                {
+                    'concept_type':'year_of_birth',
+                    'concept_id':[],
+                    'excluded':0,
+                    'descendant':0,
+                    'mapped':0,
+                    'attributes':[
+                        {
+                            'type':'inferior or equal',
+                            'bound':2000
+                        },
+                        {
+                            'type':'superior or equal',
+                            'bound':1970
+                        }
+                    ]
+                }
+            ]
+        }
+        output = CohortBuilder(cohort_criteria, drug_exposure, condition_occurrence, person, observation_period)()
+        output = output.reset_index(drop=True)
+        expected = pd.DataFrame({
+            'person_id':[1, 2, 4],
+            'cohort_start_date':[
+                pd.to_datetime('1990-01-01'),
+                pd.to_datetime('1990-01-01'),
+                pd.to_datetime('1990-01-01')
+            ]
+        })
+        pd.testing.assert_frame_equal(output, expected)
+
+    def test_previous_cohort(self):
+        cohort_criteria = {
+            'criteria':[
+                {
+                    'concept_type':'drug',
+                    'concept_id':[10],
+                    'excluded':0,
+                    'descendant':0,
+                    'mapped':0,
+                    'attributes':[]
+                }
+            ]
+        }
+        cohort = pd.DataFrame({
+            'person_id':[1],
+            'cohort_start_date':[pd.to_datetime('1990-01-01', format='%Y-%m-%d')]
+        })
+        output = CohortBuilder(cohort_criteria, drug_exposure, condition_occurrence, 
+                               person, observation_period, cohort)()
+        output = output.reset_index(drop=True)
+        expected = pd.DataFrame({
+            'person_id':[1],
+            'cohort_start_date':[
+                pd.to_datetime('2017-12-10')
+            ]
+        })
+        pd.testing.assert_frame_equal(output, expected)
+
+    def test_observation_period(self):
+        cohort_criteria = {
+            'criteria':[
+                {
+                    'concept_type':'condition',
+                    'concept_id':[44831230],
+                    'excluded':0,
+                    'descendant':0,
+                    'mapped':0,
+                    'attributes':[]
+                }
+            ],
+            'observation_period':{
+                'before_index':365,
+                'after_index':0
+            }
+        }
+        output = CohortBuilder(cohort_criteria, drug_exposure, condition_occurrence, 
+                               person, observation_period)()
+        output = output.reset_index(drop=True)
+        expected = pd.DataFrame({
+            'person_id':[1],
+            'cohort_start_date':[
+                pd.to_datetime('2017-12-10')
+            ]
+        })
+        pd.testing.assert_frame_equal(output, expected)
+
+    def test_attributes_occurrence(self):
+        drug_exposure = pd.DataFrame({
+            'person_id':[1, 1, 1, 1, 2, 2],
+            'drug_concept_id':[10, 10, 30, 40, 10, 50],
+            'drug_exposure_start_datetime':[
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2018-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+            ]
+        })
+        drug_exposure = dd.from_pandas(drug_exposure, npartitions=1).set_index('person_id')
+        cohort_criteria = {
+            'criteria':[
+                {
+                    'concept_type':'drug',
+                    'concept_id':[10], # Irinotecan liposomal
+                    'excluded':0,
+                    'descendant':0,
+                    'mapped':0,
+                    'attributes':[
+                        {
+                            'type':'occurrence',
+                            'min':2
+                        }
+                    ]
+                }
+            ]
+        }
+        output = CohortBuilder(cohort_criteria, drug_exposure, condition_occurrence, person, observation_period)()
+        expected = pd.DataFrame({
+            'person_id':[1],
+            'cohort_start_date':[pd.to_datetime('2017-12-10', format = '%Y-%m-%d')]
+        })
+        pd.testing.assert_frame_equal(output, expected)
+
 
 class TestFeaturesSelection():
     def test_feature_age_gender(self):
+        cohort = pd.DataFrame({
+            'person_id':[1, 2, 3, 4, 5],
+            'cohort_start_date':[
+                pd.to_datetime('2018-01-01'),
+                pd.to_datetime('2018-01-01'),
+                pd.to_datetime('2018-01-01'),
+                pd.to_datetime('2018-01-01'),
+                pd.to_datetime('2018-01-01')
+            ]
+        })
         features = {
             'non_time_bound':{
                 'age_group':0,
@@ -156,6 +322,16 @@ class TestFeaturesSelection():
         
 
     def test_feature_age_group_minimum(self):
+        cohort = pd.DataFrame({
+            'person_id':[1, 2, 3, 4, 5],
+            'cohort_start_date':[
+                pd.to_datetime('2018-01-01'),
+                pd.to_datetime('2018-01-01'),
+                pd.to_datetime('2018-01-01'),
+                pd.to_datetime('2018-01-01'),
+                pd.to_datetime('2018-01-01')
+            ]
+        })
         features = {
             'non_time_bound':{
                 'age_group': 1,
@@ -197,6 +373,16 @@ class TestFeaturesSelection():
         
         
     def test_feature_conditions(self):
+        cohort = pd.DataFrame({
+            'person_id':[1, 2, 3, 4, 5],
+            'cohort_start_date':[
+                pd.to_datetime('2018-01-01'),
+                pd.to_datetime('2018-01-01'),
+                pd.to_datetime('2018-01-01'),
+                pd.to_datetime('2018-01-01'),
+                pd.to_datetime('2018-01-01')
+            ]
+        })
         features = {
             'non_time_bound':{
                 'age_group': 0,
@@ -249,6 +435,16 @@ class TestFeaturesSelection():
         
         
     def test_feature_visit_count(self):
+        cohort = pd.DataFrame({
+            'person_id':[1, 2, 3, 4, 5],
+            'cohort_start_date':[
+                pd.to_datetime('2018-01-01'),
+                pd.to_datetime('2018-01-01'),
+                pd.to_datetime('2018-01-01'),
+                pd.to_datetime('2018-01-01'),
+                pd.to_datetime('2018-01-01')
+            ]
+        })
         features = {
             'non_time_bound':{
                 'age_group': 0,
@@ -285,6 +481,16 @@ class TestFeaturesSelection():
         
         
     def test_feature_comorbidities(self):
+        cohort = pd.DataFrame({
+            'person_id':[1, 2, 3, 4, 5],
+            'cohort_start_date':[
+                pd.to_datetime('2018-01-01'),
+                pd.to_datetime('2018-01-01'),
+                pd.to_datetime('2018-01-01'),
+                pd.to_datetime('2018-01-01'),
+                pd.to_datetime('2018-01-01')
+            ]
+        })
         features = {
             'non_time_bound':{
                 'age_group': 0,
@@ -331,8 +537,155 @@ class TestFeaturesSelection():
                 pd.to_datetime('2017-12-10')
             ]
         })
-        condition_occurrence = dd.from_pandas(condition_occurrence, npartitions=1)
+        condition_occurrence = dd.from_pandas(condition_occurrence, npartitions=1).set_index('person_id')
 
         output = FeaturesSelection(cohort, features,
                     drug_exposure, condition_occurrence, visit_occurrence, person, measurement, procedure)()
+        pd.testing.assert_frame_equal(output, expected)
+
+
+def test_time_at_risk():
+    cohort = pd.DataFrame({
+        'cohort_definition_id':[1, 1, 1, 1, 1, 2, 2, 2],
+        'person_id':[1, 2, 3, 4, 5, 1, 2, 3],
+        'cohort_start_date':[
+            pd.to_datetime('2018-01-01'),
+            pd.to_datetime('2018-01-01'),
+            pd.to_datetime('2018-01-01'),
+            pd.to_datetime('2018-01-01'),
+            pd.to_datetime('2018-01-01'),
+            pd.to_datetime('2019-01-01'),
+            pd.to_datetime('2018-05-01'),
+            pd.to_datetime('2018-03-01'),
+        ]
+    })
+    features = {
+        'non_time_bound':{
+            'age_group':0,
+            'age_at_index':1,
+            'gender':1
+        },
+        'time_bound':{
+            'comorbid_condition': [0, 0, 0, 0],
+            'drug': [0, 0, 0, 0],
+            'condition': [0, 0, 0, 0],
+            'procedure': [0, 0, 0, 0],
+            'measurement': [0, 0, 0, 0],
+            'measurement_value': [0, 0, 0, 0],
+            'measurement_range_group': [0, 0, 0, 0],
+            'visit_count': [0, 0, 0, 0]
+        },
+        'time_windows':{
+            'inf':5000,
+            'long':365,
+            'med':180,
+            'short':30,
+            'minimum':0.05
+        }
+    }
+    cohort_at_risk = cohort[cohort['cohort_definition_id']==1]
+    del cohort_at_risk['cohort_definition_id']
+    cohort_target = cohort[cohort['cohort_definition_id']==2]
+    del cohort_target['cohort_definition_id']
+    X = FeaturesSelection(cohort_at_risk, features,
+                        drug_exposure, condition_occurrence, visit_occurrence,
+                        person, measurement, procedure)()
+    output = time_at_risk(X, cohort_at_risk, cohort_target, time_at_risk = 200)
+    expected = pd.DataFrame({
+        'age_at_index':[28, 18, 8, 48, 58],
+        'gender = female':[1, 0, 1, 0, 0],
+        'target':[0, 1, 1, 0, 0]
+    })
+    pd.testing.assert_frame_equal(output, expected)
+
+
+def test_get_feature_scores():
+    df = pd.DataFrame({
+        'age_at_index':[28, 18, 8, 48, 58],
+        'gender = female':[1, 0, 1, 0, 0],
+        'target':[0, 1, 1, 0, 0]
+    })
+    output = get_features_scores(df, 2)
+    expected = pd.DataFrame({
+        'Specs':['age_at_index', 'gender = female'],
+        'Score':[37.60, 0.08]
+    })
+    pd.testing.assert_frame_equal(output, expected)
+
+
+class TestEraCalculation():
+    def test_era_without_concept(self):
+        cohort = pd.DataFrame({
+            'person_id':[1, 2, 3],
+            'cohort_start_date':[
+                pd.to_datetime('2018-01-01'),
+                pd.to_datetime('2018-01-01'),
+                pd.to_datetime('2018-01-01')
+            ]
+        })
+        drug_exposure = pd.DataFrame({
+            'person_id':[1, 1, 1, 1],
+            'drug_concept_id':[10, 10, 10, 20],
+            'drug_exposure_start_datetime':[
+                pd.to_datetime('2016-01-01'),
+                pd.to_datetime('2017-01-01'),
+                pd.to_datetime('2018-01-01'),
+                pd.to_datetime('2018-01-01')
+            ]
+        })
+        drug_exposure = dd.from_pandas(drug_exposure, npartitions=1)
+        drug_exposure = drug_exposure.set_index('person_id')
+        output = EraCalculation(cohort, drug_exposure, concept_ids=None)()
+        expected = pd.DataFrame({
+            'person_id':[1, 1],
+            'concept_id':[10, 20],
+            'start_date_min':[
+                pd.to_datetime('2016-01-01'),
+                pd.to_datetime('2018-01-01')
+            ],
+            'start_date_max':[
+                pd.to_datetime('2018-01-01'),
+                pd.to_datetime('2018-01-01')
+            ],
+            'count_exposure':[3, 1],
+            'gaps_count':[2, 0],
+            'era_duration':[731, 0]
+        })
+        pd.testing.assert_frame_equal(output, expected)
+        
+    def test_era_with_concept(self):
+        cohort = pd.DataFrame({
+            'person_id':[1, 2, 3],
+            'cohort_start_date':[
+                pd.to_datetime('2018-01-01'),
+                pd.to_datetime('2018-01-01'),
+                pd.to_datetime('2018-01-01')
+            ]
+        })
+        drug_exposure = pd.DataFrame({
+            'person_id':[1, 1, 1, 1],
+            'drug_concept_id':[10, 10, 10, 20],
+            'drug_exposure_start_datetime':[
+                pd.to_datetime('2016-01-01'),
+                pd.to_datetime('2017-01-01'),
+                pd.to_datetime('2018-01-01'),
+                pd.to_datetime('2018-01-01')
+            ]
+        })
+        drug_exposure = dd.from_pandas(drug_exposure, npartitions=1)
+        drug_exposure = drug_exposure.set_index('person_id')
+        output = EraCalculation(cohort, drug_exposure, concept_ids=[10])()
+        expected = pd.DataFrame({
+            'person_id':[1],
+            'concept_id':[10],
+            'start_date_min':[
+                pd.to_datetime('2016-01-01')
+            ],
+            'start_date_max':[
+                pd.to_datetime('2018-01-01')
+            ],
+            'count_exposure':[3],
+            'gaps_count':[2],
+            'era_duration':[731]
+        })
         pd.testing.assert_frame_equal(output, expected)

@@ -1,22 +1,23 @@
 import pandas as pd
 import dask.dataframe as dd
 
+from sklearn.feature_selection import SelectKBest
+from sklearn.feature_selection import chi2
 from rwd_analytics.lookups import Descendants, ComorbidConditions
 
 
 class FeaturesSelection():
     def __init__(self, cohort, features,
                  drug_exposure, condition_occurrence, visit_occurrence, person, measurement, procedure):
-        X = cohort[cohort['cohort_definition_id']==1]
-        del X['cohort_definition_id']
-        self.X = X.rename(columns={'subject_id':'person_id'})
+        self.X = cohort
         self.subjects = self.X.person_id.unique().tolist()
         self.number_of_subjects = len(self.subjects)
         
         self.features = features
         self.drug_exposure = drug_exposure
         self.condition_occurrence = condition_occurrence[
-            ['person_id', 'condition_concept_id', 'condition_start_datetime']]
+            #['person_id', 'condition_concept_id', 'condition_start_datetime']]
+            ['condition_concept_id', 'condition_start_datetime']]
         self.condition_occurrence = self.condition_occurrence.rename(columns={
             'condition_concept_id':'concept_id',
             'condition_start_datetime':'start_date'
@@ -24,9 +25,10 @@ class FeaturesSelection():
         self.visit_occurrence = visit_occurrence
         self.measurement = measurement
         self.procedure = procedure
-        person = person[['person_id', 'year_of_birth', 'gender_concept_id']]
+        #person = person[['person_id', 'year_of_birth', 'gender_concept_id']]
+        person = person[['year_of_birth', 'gender_concept_id']]
         self.comorbidities = ComorbidConditions()
-        self.person = person[person['person_id'].isin(self.subjects)].compute()
+        self.person = person.loc[self.subjects].compute()
         
     def __clean_features_by_occurrences(self):
         min_feat_occurrence = self.features['time_windows']['minimum']*self.number_of_subjects
@@ -39,6 +41,7 @@ class FeaturesSelection():
 
     def __non_time_bound_features(self):
         print('Getting non time bound features')
+        self.person = self.person
         self.X = self.X.merge(self.person, how='left', on='person_id')
         self.X['age_at_index'] = self.X['cohort_start_date'].dt.year - self.X['year_of_birth']
 
@@ -91,9 +94,9 @@ class FeaturesSelection():
             self.X[feature_name+time_window] = self.X[feature_name+time_window].fillna(0).astype(int)
             
         elif feature_name == 'comorbid_condition':
-            for index, row in self.comorbidities().iterrows():
-                f_name = row['COMMORBIDITIES'].lower().replace(' ', '_')+'_'+time_window
-                comorbid_concepts = row['CONCEPT_ID'].replace('[', '').replace(']', '').split(',')
+            for row in self.comorbidities().itertuples(index=True, name='Pandas'):
+                f_name = getattr(row, "COMMORBIDITIES").lower().replace(' ', '_')+'_'+time_window
+                comorbid_concepts = getattr(row, "CONCEPT_ID").replace('[', '').replace(']', '').split(',')
                 comorbid_tmp = tmp[tmp['concept_id'].isin(comorbid_concepts)]
                 subjects = comorbid_tmp.person_id.unique().tolist()
                 self.X[f_name] = 1
@@ -110,7 +113,9 @@ class FeaturesSelection():
                     self.X[t] = self.X[t].where(self.X['person_id'].isin(subjects), 0)
 
     def __feature_generator(self, df, feature_name, time_features):
-        df = df[df['person_id'].isin(self.subjects)].compute()
+        #df = df[df['person_id'].isin(self.subjects)].compute()
+        df = df.loc[df.index.isin(self.subjects)]
+        df = df.compute()
         df = df.merge(self.X, how='inner', on='person_id')
         df['time_to_index'] = (df['cohort_start_date'] - df['start_date']).dt.days
         df = df[df['time_to_index'] > 0]
@@ -134,7 +139,8 @@ class FeaturesSelection():
         if sum(time_features) > 0:
             print('Getting visit count features')
             feature_name = 'visit_count_'
-            df = self.visit_occurrence[['person_id', 'visit_start_datetime']]
+            #df = self.visit_occurrence[['person_id', 'visit_start_datetime']]
+            df = self.visit_occurrence[['visit_start_datetime']]
             df = df.rename(columns={
                 'visit_start_datetime':'start_date'
             })
@@ -162,7 +168,8 @@ class FeaturesSelection():
         if sum(time_features) > 0:
             print('Getting procedure features')
             feature_name = 'procedure'
-            df = self.procedure[['person_id', 'procedure_concept_id', 'procedure_datetime']]
+            #df = self.procedure[['person_id', 'procedure_concept_id', 'procedure_datetime']]
+            df = self.procedure[['procedure_concept_id', 'procedure_datetime']]
             df = df.rename(columns={
                 'procedure_concept_id':'concept_id',
                 'procedure_datetime':'start_date'
@@ -173,7 +180,8 @@ class FeaturesSelection():
         if sum(time_features) > 0:
             print('Getting measurement features')
             feature_name = 'measurement'
-            df = self.measurement[['person_id', 'measurement_concept_id', 'measurement_datetime']]
+            #df = self.measurement[['person_id', 'measurement_concept_id', 'measurement_datetime']]
+            df = self.measurement[['measurement_concept_id', 'measurement_datetime']]
             df = df.rename(columns={
                 'measurement_concept_id':'concept_id',
                 'measurement_datetime':'start_date'
@@ -212,7 +220,8 @@ class FeaturesSelection():
         if sum(time_features) > 0:
             print('Getting drug features')
             feature_name = 'drug'
-            df = self.drug_exposure[['person_id', 'drug_concept_id', 'drug_exposure_start_datetime']]
+            #df = self.drug_exposure[['person_id', 'drug_concept_id', 'drug_exposure_start_datetime']]
+            df = self.drug_exposure[['drug_concept_id', 'drug_exposure_start_datetime']]
             df = df.rename(columns={
                 'drug_concept_id':'concept_id',
                 'drug_exposure_start_datetime':'start_date'
@@ -225,3 +234,39 @@ class FeaturesSelection():
         print('Number of features: '+str(len(self.X.columns)-2))
 
         return self.X
+
+
+def time_at_risk(X, cohort_at_risk, cohort_target, time_at_risk = 0):
+    cohort_at_risk = cohort_at_risk.merge(cohort_target, how='inner', on='person_id')
+    if time_at_risk != 0:
+        cohort_at_risk['time_to_event'] = cohort_at_risk['cohort_start_date_y'] \
+                                          - cohort_at_risk['cohort_start_date_x']
+        cohort_at_risk = cohort_at_risk[cohort_at_risk['time_to_event'].dt.days < time_at_risk]
+    cohort_at_risk = cohort_at_risk.person_id.unique().tolist()
+    print('Subject at risk:'+ str(len(cohort_at_risk)))
+    X['target'] = 1
+    X['target'] = X['target'].where(X['person_id'].isin(cohort_at_risk), 0)
+    print('Number of patients in final cohort: '+str(len(X)))
+    del X['person_id']
+    del X['cohort_start_date']
+    return X
+
+
+def get_features_scores(df, n_features):
+    X = df.iloc[:,0:n_features]  #independent columns
+    y = df.iloc[:,-1]    #target column i.e price range
+    
+    #apply SelectKBest class to extract top 10 best features
+    bestfeatures = SelectKBest(score_func=chi2, k=n_features)
+    fit = bestfeatures.fit(X,y)
+    dfscores = pd.DataFrame(fit.scores_)
+    dfcolumns = pd.DataFrame(X.columns)
+    
+    #concat two dataframes for better visualization 
+    featureScores = pd.concat([dfcolumns, dfscores], axis=1)
+
+    # naming the dataframe columns and rounding results
+    featureScores.columns = ['Specs', 'Score']
+    featureScores['Score'] = featureScores['Score'].round(2)
+    return featureScores.nlargest(n_features, 'Score')
+
