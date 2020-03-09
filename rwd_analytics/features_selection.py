@@ -1,7 +1,3 @@
-########
-#TODO: https://github.com/OHDSI/PatientLevelPrediction/tree/master/inst/python
-#######
-
 import pandas as pd
 import dask.dataframe as dd
 
@@ -20,7 +16,6 @@ class FeaturesSelection():
         self.features = features
         self.drug_exposure = drug_exposure
         self.condition_occurrence = condition_occurrence[
-            #['person_id', 'condition_concept_id', 'condition_start_datetime']]
             ['condition_concept_id', 'condition_start_datetime']]
         self.condition_occurrence = self.condition_occurrence.rename(columns={
             'condition_concept_id':'concept_id',
@@ -29,7 +24,6 @@ class FeaturesSelection():
         self.visit_occurrence = visit_occurrence
         self.measurement = measurement
         self.procedure = procedure
-        #person = person[['person_id', 'year_of_birth', 'gender_concept_id']]
         person = person[['year_of_birth', 'gender_concept_id']]
         self.comorbidities = ComorbidConditions()
         self.person = person.loc[self.subjects].compute()
@@ -117,7 +111,6 @@ class FeaturesSelection():
                     self.X[t] = self.X[t].where(self.X['person_id'].isin(subjects), 0)
 
     def __feature_generator(self, df, feature_name, time_features):
-        #df = df[df['person_id'].isin(self.subjects)].compute()
         df = df.loc[df.index.isin(self.subjects)]
         df = df.compute()
         df = df.merge(self.X, how='inner', on='person_id')
@@ -143,7 +136,6 @@ class FeaturesSelection():
         if sum(time_features) > 0:
             print('Getting visit count features')
             feature_name = 'visit_count_'
-            #df = self.visit_occurrence[['person_id', 'visit_start_datetime']]
             df = self.visit_occurrence[['visit_start_datetime']]
             df = df.rename(columns={
                 'visit_start_datetime':'start_date'
@@ -172,7 +164,6 @@ class FeaturesSelection():
         if sum(time_features) > 0:
             print('Getting procedure features')
             feature_name = 'procedure'
-            #df = self.procedure[['person_id', 'procedure_concept_id', 'procedure_datetime']]
             df = self.procedure[['procedure_concept_id', 'procedure_datetime']]
             df = df.rename(columns={
                 'procedure_concept_id':'concept_id',
@@ -184,7 +175,6 @@ class FeaturesSelection():
         if sum(time_features) > 0:
             print('Getting measurement features')
             feature_name = 'measurement'
-            #df = self.measurement[['person_id', 'measurement_concept_id', 'measurement_datetime']]
             df = self.measurement[['measurement_concept_id', 'measurement_datetime']]
             df = df.rename(columns={
                 'measurement_concept_id':'concept_id',
@@ -224,7 +214,6 @@ class FeaturesSelection():
         if sum(time_features) > 0:
             print('Getting drug features')
             feature_name = 'drug'
-            #df = self.drug_exposure[['person_id', 'drug_concept_id', 'drug_exposure_start_datetime']]
             df = self.drug_exposure[['drug_concept_id', 'drug_exposure_start_datetime']]
             df = df.rename(columns={
                 'drug_concept_id':'concept_id',
