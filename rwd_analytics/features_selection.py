@@ -1,3 +1,7 @@
+########
+#TODO: https://github.com/OHDSI/PatientLevelPrediction/tree/master/inst/python
+#######
+
 import pandas as pd
 import dask.dataframe as dd
 
@@ -96,7 +100,7 @@ class FeaturesSelection():
         elif feature_name == 'comorbid_condition':
             for row in self.comorbidities().itertuples(index=True, name='Pandas'):
                 f_name = getattr(row, "COMMORBIDITIES").lower().replace(' ', '_')+'_'+time_window
-                comorbid_concepts = getattr(row, "CONCEPT_ID").replace('[', '').replace(']', '').split(',')
+                comorbid_concepts = getattr(row, "CONCEPT_ID").replace('[', '').replace(']', '').split(', ')
                 comorbid_tmp = tmp[tmp['concept_id'].isin(comorbid_concepts)]
                 subjects = comorbid_tmp.person_id.unique().tolist()
                 self.X[f_name] = 1

@@ -1,12 +1,14 @@
 import pandas as pd
 import dask.dataframe as dd
 
-OMOP_VOC_PATH = 'resource/omop_voc/'
+OMOP_VOC_PATH = 'resources/omop_voc/'
+#OMOP_VOC_PATH = '/ipsenhealthdata/voc/20_02_18_VOC_OMOP/'
 
 
 class Descendants():
     def __init__(self):
-        self.concept_ancestor = dd.read_csv(OMOP_VOC_PATH+'concept_ancestor.csv', sep="\t")
+        self.concept_ancestor = dd.read_csv(OMOP_VOC_PATH+'CONCEPT_ANCESTOR.csv', sep="\t",
+                                            usecols=['descendant_concept_id', 'ancestor_concept_id'])
 
     def __call__(self, concept_ids):
         """
@@ -20,13 +22,39 @@ class ComorbidConditions():
     def __init__(self):
         self.comorbidities = pd.read_csv('resources/comorbid_conditions/comorbidities_magic.csv')
 
-    def __call__(self):
+    def __call__(self, comorbid=None):
+        """
+        Return a list of CONCEPT IDs or all comorbidities.
+
+        Possible comorbid conditions to be requested are:
+        'Congestive heart failure', 'Cardiac arrhythmias', 'Valvular disease',
+        'Pulmonary circulation Disorders', 'Peripheral vascular disorders', 'Hypertension,uncomplicated',
+        'Hypertension,complicated', 'Paralysis', 'Other neurological disorders',
+        'Chronic pulmonary disease', 'Diabetes,uncomplicated', 'Diabetes,complicated',
+        'Hypothyroidism', 'Renal failure', 'Liver disease', 'Peptic ulcer disease excluding bleeding',
+        'Lymphoma', 'Metastatic cancer', 'Solid tumor without metastasis',
+        'Rheumatoid arthritis/collagen vascular diseases',
+        'Coagulopathy', 'Obesity', 'Weight loss', 'Fluid and electrolyte disorders',
+        'Blood loss anemia', 'Deficiency anemia', 'Drug abuse', 'Psychoses',
+        'Depression', 'Alcohol abuse', 'AIDS/H1V'
+        """
+        if comorbid is not None:
+            self.comorbidities = self.comorbidities[self.comorbidities['COMMORBIDITIES']==comorbid]
+            temp = self.comorbidities.iloc[0]['CONCEPT_ID']
+            temp = temp.replace('[', '').replace(']', '').split(', ')
+            return temp
         return self.comorbidities
 
 
 class ConceptInfo():
     def __init__(self):
-        self.concept = dd.read_csv(OMOP_VOC_PATH+'concept.csv', sep="\t")
+        self.concept = dd.read_csv(OMOP_VOC_PATH+'CONCEPT.csv', sep="\t",
+                                   dtype={
+                                       'standard_concept': 'object',
+                                       'concept_code': 'object',
+                                       'concept_name': 'object',
+                                       'invalid_reason': 'object'
+                                       })
     
     def __call__(self, df, columns):
         """
@@ -52,30 +80,39 @@ class ConceptInfo():
 
 
 class Ingredient():
-    def __init__(self, df):
-        concept = dd.read_csv(OMOP_VOC_PATH+'concept.csv', sep="\t")
+    def __init__(self):
+        concept = dd.read_csv(OMOP_VOC_PATH+'CONCEPT.csv', sep="\t",
+                              dtype={
+                                  'standard_concept': 'object',
+                                  'vocabulary_id': 'object',
+                                  'concept_class_id': 'object',
+                                  'invalid_reason': 'object'},
+                              usecols=['concept_id', 'vocabulary_id', 'standard_concept',
+                                       'invalid_reason', 'concept_class_id'])
         concept = concept[(concept['vocabulary_id'] == 'RxNorm')
                         &(concept['standard_concept']=='S')
                         &(concept['invalid_reason'].isnull())
                         &(concept['concept_class_id'] == 'Ingredient')] 
-        list_concept = concept['concept_id'].unique().compute().tolist()
-        drug_concept_ids = df.drug_concept_id.unique().tolist()
-        concept_ancestor = dd.read_csv(OMOP_VOC_PATH+'concept_ancestor.csv', sep="\t")
-        concept_ancestor = concept_ancestor[concept_ancestor['descendant_concept_id'].isin(drug_concept_ids)]
-        self.concept_ancestor = concept_ancestor[concept_ancestor['ancestor_concept_id'].isin(list_concept)]
-        self.df = df
+        self.list_concept = concept['concept_id'].unique().compute().tolist()
+        self.concept_ancestor = dd.read_csv(OMOP_VOC_PATH+'CONCEPT_ANCESTOR.csv', sep="\t",
+                                        usecols=['descendant_concept_id', 'ancestor_concept_id'])
 
-    def __call__(self):
-        df = pd.merge(self.df, self.concept_ancestor, how='left',
+    def __call__(self, df):
+        drug_concept_ids = df.drug_concept_id.unique().tolist()
+        temp = self.concept_ancestor[self.concept_ancestor['descendant_concept_id'].isin(drug_concept_ids)]
+        temp = temp[temp['ancestor_concept_id'].isin(self.list_concept)]
+        temp = temp.compute()
+        df = pd.merge(df, temp, how='left',
                       left_on='drug_concept_id', right_on='descendant_concept_id')
         del df['drug_concept_id']
+        del df['descendant_concept_id']
         df = df.rename(columns={'ancestor_concept_id':'drug_concept_id'})
         return df
 
 
 class ConceptRelationship():
     def __init__(self):
-        self.concept_relationship = dd.read_csv(OMOP_VOC_PATH+'concept_relationship.csv', sep="\t")
+        self.concept_relationship = dd.read_csv(OMOP_VOC_PATH+'CONCEPT_RELATIONSHIP.csv', sep="\t")
 
     def __call__(self, concept_ids):
         tmp = self.concept_relationship[self.concept_relationship['concept_id_1'].isin(concept_ids)]

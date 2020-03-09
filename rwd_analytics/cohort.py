@@ -47,6 +47,11 @@ class CohortBuilder():
         return tmp
 
     def __attributes_selection(self, tmp, criteria):
+        """
+        Possible attributes type:
+        - 'occurrence' with a 'min'
+        - 'before' to add a event before the previous cohort_start_date
+        """
         attributes = criteria['attributes']
         if len(attributes) != 0:
             for attribute in attributes:
@@ -54,6 +59,19 @@ class CohortBuilder():
                     tmp = tmp.groupby('person_id').cohort_start_date.agg(['min', 'count'])
                     tmp = tmp[tmp['count'] >= attribute['min']]
                     tmp.columns = ['cohort_start_date', 'count']
+                if attribute['type'] in ['before', 'after']:
+                    tmp = tmp.groupby('person_id').cohort_start_date.min().to_frame().reset_index()
+                    tmp.columns = ['person_id', 'min_date']
+                    tmp = tmp.merge(self.cohort, on ='person_id', how='inner')
+                    if attribute['type'] == 'before':
+                        tmp = tmp[tmp['min_date'] < tmp['cohort_start_date']]
+                    if attribute['type'] == 'after':
+                        tmp = tmp[tmp['min_date'] > tmp['cohort_start_date']]
+                if attribute['type'] == 'length':
+                    tmp = tmp.groupby('person_id').cohort_start_date.agg(['min', 'max'])
+                    tmp['duration'] = (tmp['max'] - tmp['min']).dt.days
+                    tmp = tmp[tmp['duration'] > attribute['min']]
+                    tmp = tmp.rename(columns={'min':'cohort_start_date'})
         else:
             tmp = tmp.groupby('person_id').cohort_start_date.min()
         

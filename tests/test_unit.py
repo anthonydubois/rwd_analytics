@@ -3,8 +3,9 @@ import dask.dataframe as dd
 import pytest
 
 from rwd_analytics.cohort import CohortBuilder
-from rwd_analytics.treatment_line import EraCalculation
+from rwd_analytics.treatment_line import EraCalculation, last_activity_date
 from rwd_analytics.features_selection import FeaturesSelection, time_at_risk, get_features_scores
+from rwd_analytics.lookups import Descendants, ConceptInfo, ConceptRelationship, ComorbidConditions, Ingredient
 
 person = pd.DataFrame({
     'person_id':[1, 2, 3, 4, 5],
@@ -267,6 +268,100 @@ class TestCohort():
         expected = pd.DataFrame({
             'person_id':[1],
             'cohort_start_date':[pd.to_datetime('2017-12-10', format = '%Y-%m-%d')]
+        })
+        pd.testing.assert_frame_equal(output, expected)
+
+    def test_condition_with_drug_before(self):
+        condition_occurrence = pd.DataFrame({
+            'person_id':[1, 1, 1, 1, 2, 2],
+            'condition_concept_id':[44831230, 2, 3, 4, 44831230, 2],
+            'condition_start_datetime':[
+                pd.to_datetime('2018-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+            ]
+        })
+        drug_exposure = pd.DataFrame({
+            'person_id':[1, 1, 1, 1, 2, 2],
+            'drug_concept_id':[10, 20, 30, 40, 10, 20],
+            'drug_exposure_start_datetime':[
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+            ]
+        })
+        condition_occurrence = dd.from_pandas(condition_occurrence, npartitions=1).set_index('person_id')
+        drug_exposure = dd.from_pandas(drug_exposure, npartitions=1).set_index('person_id')
+
+        cohort_criteria = {
+            'criteria':[
+                {
+                    'concept_type':'condition',
+                    'concept_id':[44831230],
+                    'excluded':0,
+                    'descendant':0,
+                    'mapped':0,
+                    'attributes':[]
+                },
+                {
+                    'concept_type':'drug',
+                    'concept_id':[10],
+                    'excluded':0,
+                    'descendant':0,
+                    'mapped':0,
+                    'attributes':[{
+                        'type':'before'
+                    }]
+                }
+            ]
+        }
+        output = CohortBuilder(cohort_criteria, drug_exposure, condition_occurrence,
+                            person, observation_period)()
+        expected = pd.DataFrame({
+            'person_id':[1],
+            'cohort_start_date':[pd.to_datetime('2018-12-10')]
+        })
+        pd.testing.assert_frame_equal(output, expected)
+
+    def test_attributes_min_lenght(self):
+        drug_exposure = pd.DataFrame({
+            'person_id':[1, 1, 1, 1, 2, 2],
+            'drug_concept_id':[10, 10, 30, 40, 10, 20],
+            'drug_exposure_start_datetime':[
+                pd.to_datetime('2018-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+            ]
+        })
+        drug_exposure = dd.from_pandas(drug_exposure, npartitions=1).set_index('person_id')
+        cohort_criteria = {
+            'criteria':[
+                {
+                    'concept_type':'drug',
+                    'concept_id': [10],
+                    'excluded': 0,
+                    'descendant':0,
+                    'mapped':0,
+                    'attributes':[{
+                        'type':'length',
+                        'min':100
+                    }]
+                }
+            ]
+        }
+        output = CohortBuilder(cohort_criteria, drug_exposure, condition_occurrence, person, observation_period)()
+        expected = pd.DataFrame({
+            'person_id':[1],
+            'cohort_start_date':[pd.to_datetime('2017-12-10')]
         })
         pd.testing.assert_frame_equal(output, expected)
 
@@ -614,6 +709,46 @@ def test_get_feature_scores():
 
 
 class TestEraCalculation():
+    def test_last_activity_date(self):
+        cohort = pd.DataFrame({
+            'person_id':[1, 2, 3]
+        })
+        condition_occurrence = pd.DataFrame({
+            'person_id':[1, 1, 1, 1, 2, 2],
+            'condition_concept_id':[44831230, 2, 3, 4, 44831230, 2],
+            'condition_start_datetime':[
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2019-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+            ]
+        })
+        drug_exposure = pd.DataFrame({
+            'person_id':[1, 1, 1, 1, 2, 2],
+            'drug_concept_id':[10, 20, 30, 40, 10, 20],
+            'drug_exposure_start_datetime':[
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2018-12-10'),
+            ]
+        })
+        condition_occurrence = dd.from_pandas(condition_occurrence, npartitions=1).set_index('person_id')
+        drug_exposure = dd.from_pandas(drug_exposure, npartitions=1).set_index('person_id')
+        output = last_activity_date(cohort, drug_exposure, condition_occurrence)
+        expected = pd.DataFrame({
+            'person_id':[1, 2],
+            'last_activity_date':[
+                pd.to_datetime('2019-12-10'),
+                pd.to_datetime('2018-12-10'),
+            ]
+        })
+        pd.testing.assert_frame_equal(output, expected)
+
     def test_era_without_concept(self):
         cohort = pd.DataFrame({
             'person_id':[1, 2, 3],
@@ -689,3 +824,51 @@ class TestEraCalculation():
             'era_duration':[731]
         })
         pd.testing.assert_frame_equal(output, expected)
+
+
+class TestLookups():
+    def test_descendants(self):
+        output = Descendants()([43012292])
+        expected = [43012038, 43011640, 42629394, 43011643, 43011641,
+                    36249906, 42629383, 42629389, 42629387, 42629382,
+                    36246764, 42629386, 36246765, 43012292, 43012022,
+                    43013204, 43012062, 42629388, 42629385, 43012021,
+                    43011642, 43011637, 35805797, 35806421, 43012020,
+                    36246763, 42629392, 43012063, 43013205, 36246766,
+                    43012064, 42629393, 43011638, 42629390, 43012023,
+                    42629391, 36249905, 42629395]
+        assert output == expected
+        
+    def test_concept_info(self):
+        df = pd.DataFrame({
+            'person_id':[1, 2, 3],
+            'concept_id':[43012292, 43012292, 43012292]
+        })
+        output = ConceptInfo()(df, ['concept_name', 'domain_id'])
+        expected = pd.DataFrame({
+            'person_id':[1, 2, 3],
+            'concept_id':[43012292, 43012292, 43012292],
+            'concept_name':['cabozantinib']*3,
+            'domain_id':['Drug']*3
+        })
+        pd.testing.assert_frame_equal(output, expected)
+        
+    def test_ingredient(self):
+        df = pd.DataFrame({
+            'person_id':[1, 2, 3],
+            'drug_concept_id':[43011640, 42629394, 43011643]
+        })
+        output = Ingredient()(df)
+        expected = pd.DataFrame({
+            'person_id':[1, 2, 3],
+            'drug_concept_id':[43012292]*3
+        })
+        pd.testing.assert_frame_equal(output, expected)
+        
+    def test_comorbid_conditions(self):
+        output = ComorbidConditions()('AIDS/H1V')
+        expected = ['45552213', '45542556', '45537755', '45566541', '45585950', '45600449',
+        '45571459', '45542557', '45556930', '45556931', '45571460', '45571461',
+        '45556932', '45571462', '45581152', '45561747', '45532867', '45595610',
+        '45547443']
+        assert output == expected
