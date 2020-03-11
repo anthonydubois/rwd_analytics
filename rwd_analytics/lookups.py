@@ -2,7 +2,6 @@ import pandas as pd
 import dask.dataframe as dd
 
 OMOP_VOC_PATH = 'resources/omop_voc/'
-#OMOP_VOC_PATH = '/ipsenhealthdata/voc/20_02_18_VOC_OMOP/'
 
 
 class Descendants():
