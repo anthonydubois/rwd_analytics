@@ -3,7 +3,7 @@ import dask.dataframe as dd
 import pytest
 
 from rwd_analytics.cohort import CohortBuilder
-from rwd_analytics.treatment_line import EraCalculation, last_activity_date
+from rwd_analytics.treatment_line import EraCalculation, last_activity_date, line_generation_preprocess, LinesOfTherapy, LineName
 from rwd_analytics.features_selection import FeaturesSelection, time_at_risk, get_features_scores
 from rwd_analytics.lookups import Descendants, ConceptInfo, ConceptRelationship, ComorbidConditions, Ingredient
 
@@ -63,6 +63,15 @@ measurement = pd.DataFrame()
 procedure = pd.DataFrame()
 measurement = dd.from_pandas(measurement, npartitions=1)
 procedure = dd.from_pandas(procedure, npartitions=1)
+omop_tables = {
+    'person':person,
+    'condition_occurrence':condition_occurrence,
+    'procedure_occurrence':procedure,
+    'drug_exposure':drug_exposure,
+    'visit_occurrence':visit_occurrence,
+    'observation_period':observation_period,
+    'measurement':measurement
+}
 
 
 class TestCohort():
@@ -79,7 +88,7 @@ class TestCohort():
                 }
             ]
         }
-        output = CohortBuilder(cohort_criteria, drug_exposure, condition_occurrence, person, observation_period)()
+        output = CohortBuilder(cohort_criteria, omop_tables)()
         output = output.reset_index(drop=True)
         expected = pd.DataFrame({
             'person_id':[2, 4, 5],
@@ -104,7 +113,7 @@ class TestCohort():
                 }
             ]
         }
-        output = CohortBuilder(cohort_criteria, drug_exposure, condition_occurrence, person, observation_period)()
+        output = CohortBuilder(cohort_criteria, omop_tables)()
         expected = pd.DataFrame({
             'person_id':[1],
             'cohort_start_date':[
@@ -134,7 +143,7 @@ class TestCohort():
                 }
             ]
         }
-        output = CohortBuilder(cohort_criteria, drug_exposure, condition_occurrence, person, observation_period)()
+        output = CohortBuilder(cohort_criteria, omop_tables)()
         expected = pd.DataFrame({
             'person_id':[2],
             'cohort_start_date':[
@@ -165,7 +174,7 @@ class TestCohort():
                 }
             ]
         }
-        output = CohortBuilder(cohort_criteria, drug_exposure, condition_occurrence, person, observation_period)()
+        output = CohortBuilder(cohort_criteria, omop_tables)()
         output = output.reset_index(drop=True)
         expected = pd.DataFrame({
             'person_id':[1, 2, 4],
@@ -194,8 +203,7 @@ class TestCohort():
             'person_id':[1],
             'cohort_start_date':[pd.to_datetime('1990-01-01', format='%Y-%m-%d')]
         })
-        output = CohortBuilder(cohort_criteria, drug_exposure, condition_occurrence, 
-                               person, observation_period, cohort)()
+        output = CohortBuilder(cohort_criteria, omop_tables, cohort)()
         output = output.reset_index(drop=True)
         expected = pd.DataFrame({
             'person_id':[1],
@@ -222,8 +230,7 @@ class TestCohort():
                 'after_index':0
             }
         }
-        output = CohortBuilder(cohort_criteria, drug_exposure, condition_occurrence, 
-                               person, observation_period)()
+        output = CohortBuilder(cohort_criteria, omop_tables)()
         output = output.reset_index(drop=True)
         expected = pd.DataFrame({
             'person_id':[1],
@@ -264,7 +271,16 @@ class TestCohort():
                 }
             ]
         }
-        output = CohortBuilder(cohort_criteria, drug_exposure, condition_occurrence, person, observation_period)()
+        omop_tables = {
+            'person':person,
+            'condition_occurrence':condition_occurrence,
+            'procedure_occurrence':procedure,
+            'drug_exposure':drug_exposure,
+            'visit_occurrence':visit_occurrence,
+            'observation_period':observation_period,
+            'measurement':measurement
+        }
+        output = CohortBuilder(cohort_criteria, omop_tables)()
         expected = pd.DataFrame({
             'person_id':[1],
             'cohort_start_date':[pd.to_datetime('2017-12-10', format = '%Y-%m-%d')]
@@ -321,8 +337,16 @@ class TestCohort():
                 }
             ]
         }
-        output = CohortBuilder(cohort_criteria, drug_exposure, condition_occurrence,
-                            person, observation_period)()
+        omop_tables = {
+            'person':person,
+            'condition_occurrence':condition_occurrence,
+            'procedure_occurrence':procedure,
+            'drug_exposure':drug_exposure,
+            'visit_occurrence':visit_occurrence,
+            'observation_period':observation_period,
+            'measurement':measurement
+        }
+        output = CohortBuilder(cohort_criteria, omop_tables)()
         expected = pd.DataFrame({
             'person_id':[1],
             'cohort_start_date':[pd.to_datetime('2018-12-10')]
@@ -358,7 +382,16 @@ class TestCohort():
                 }
             ]
         }
-        output = CohortBuilder(cohort_criteria, drug_exposure, condition_occurrence, person, observation_period)()
+        omop_tables = {
+            'person':person,
+            'condition_occurrence':condition_occurrence,
+            'procedure_occurrence':procedure,
+            'drug_exposure':drug_exposure,
+            'visit_occurrence':visit_occurrence,
+            'observation_period':observation_period,
+            'measurement':measurement
+        }
+        output = CohortBuilder(cohort_criteria, omop_tables)()
         expected = pd.DataFrame({
             'person_id':[1],
             'cohort_start_date':[pd.to_datetime('2017-12-10')]
@@ -410,8 +443,7 @@ class TestFeaturesSelection():
             'gender = female':[1, 0, 1, 0, 0]
         })
 
-        output = FeaturesSelection(cohort, features,
-                    drug_exposure, condition_occurrence, visit_occurrence, person, measurement, procedure)()
+        output = FeaturesSelection(cohort, features, omop_tables)()
 
         pd.testing.assert_frame_equal(output, expected)
         
@@ -462,8 +494,7 @@ class TestFeaturesSelection():
             '55-59': [0, 0, 0, 0, 1]
         })
 
-        output = FeaturesSelection(cohort, features,
-                    drug_exposure, condition_occurrence, visit_occurrence, person, measurement, procedure)()
+        output = FeaturesSelection(cohort, features, omop_tables)()
         pd.testing.assert_frame_equal(output, expected)
         
         
@@ -524,8 +555,7 @@ class TestFeaturesSelection():
             '4_short':[1, 0, 0, 0, 0],
         })
 
-        output = FeaturesSelection(cohort, features,
-                    drug_exposure, condition_occurrence, visit_occurrence, person, measurement, procedure)()
+        output = FeaturesSelection(cohort, features, omop_tables)()
         pd.testing.assert_frame_equal(output, expected)
         
         
@@ -570,8 +600,7 @@ class TestFeaturesSelection():
             'cohort_start_date':[pd.to_datetime('2018-01-01')]*5,
             'visit_count_med':[1, 0, 0, 0, 0]
         })
-        output = FeaturesSelection(cohort, features,
-                    drug_exposure, condition_occurrence, visit_occurrence, person, measurement, procedure)()
+        output = FeaturesSelection(cohort, features, omop_tables)()
         pd.testing.assert_frame_equal(output, expected)
         
         
@@ -633,9 +662,16 @@ class TestFeaturesSelection():
             ]
         })
         condition_occurrence = dd.from_pandas(condition_occurrence, npartitions=1).set_index('person_id')
-
-        output = FeaturesSelection(cohort, features,
-                    drug_exposure, condition_occurrence, visit_occurrence, person, measurement, procedure)()
+        omop_tables = {
+            'person':person,
+            'condition_occurrence':condition_occurrence,
+            'procedure_occurrence':procedure,
+            'drug_exposure':drug_exposure,
+            'visit_occurrence':visit_occurrence,
+            'observation_period':observation_period,
+            'measurement':measurement
+        }
+        output = FeaturesSelection(cohort, features, omop_tables)()
         pd.testing.assert_frame_equal(output, expected)
 
 
@@ -682,9 +718,7 @@ def test_time_at_risk():
     del cohort_at_risk['cohort_definition_id']
     cohort_target = cohort[cohort['cohort_definition_id']==2]
     del cohort_target['cohort_definition_id']
-    X = FeaturesSelection(cohort_at_risk, features,
-                        drug_exposure, condition_occurrence, visit_occurrence,
-                        person, measurement, procedure)()
+    X = FeaturesSelection(cohort_at_risk, features, omop_tables)()
     output = time_at_risk(X, cohort_at_risk, cohort_target, time_at_risk = 200)
     expected = pd.DataFrame({
         'age_at_index':[28, 18, 8, 48, 58],
@@ -739,7 +773,16 @@ class TestEraCalculation():
         })
         condition_occurrence = dd.from_pandas(condition_occurrence, npartitions=1).set_index('person_id')
         drug_exposure = dd.from_pandas(drug_exposure, npartitions=1).set_index('person_id')
-        output = last_activity_date(cohort, drug_exposure, condition_occurrence)
+        omop_tables = {
+            'person':person,
+            'condition_occurrence':condition_occurrence,
+            'procedure_occurrence':procedure,
+            'drug_exposure':drug_exposure,
+            'visit_occurrence':visit_occurrence,
+            'observation_period':observation_period,
+            'measurement':measurement
+        }
+        output = last_activity_date(cohort, omop_tables)
         expected = pd.DataFrame({
             'person_id':[1, 2],
             'last_activity_date':[
@@ -872,3 +915,54 @@ class TestLookups():
         '45556932', '45571462', '45581152', '45561747', '45532867', '45595610',
         '45547443']
         assert output == expected
+
+
+class TestTreatmentLine():
+    def test_line_generation(self):
+        cohort = pd.DataFrame({
+            'person_id':[1, 2],
+            'cohort_start_date':[
+                pd.to_datetime('2017-11-17', format='%Y-%m-%d'),
+                pd.to_datetime('2017-11-17', format='%Y-%m-%d')
+            ]
+        })
+        drug_exposure = pd.DataFrame({
+            'person_id':[1, 1, 1, 1, 2, 2, 2],
+            'drug_concept_id':[46276410, 46276410, 46276410, 46276410, 46276410, 46276410, 25],
+            'drug_exposure_start_datetime':[
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10')
+            ]
+        })
+        drug_exposure = dd.from_pandas(drug_exposure, npartitions=1).set_index('person_id')
+        omop_tables = {
+            'person':person,
+            'condition_occurrence':condition_occurrence,
+            'procedure_occurrence':procedure,
+            'drug_exposure':drug_exposure,
+            'visit_occurrence':visit_occurrence,
+            'observation_period':observation_period,
+            'measurement':measurement
+        }
+        ingredient_list = [45775965]
+        ingredient_list = [45775965]
+        drug_temp, cohort_enhanced = line_generation_preprocess(cohort, ingredient_list, omop_tables)
+        lot = LinesOfTherapy(drug_temp, cohort_enhanced)().compute()
+        treatments_df = pd.DataFrame({'concept_id':ingredient_list})
+        concept_infos = ConceptInfo()(treatments_df, ['concept_name'])
+        output = LineName(lot, concept_infos)()
+        expected = pd.DataFrame({
+            'person_id':[1, 2],
+            'start_date':[
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10')
+            ],
+            'line_number':[1]*2,
+            'regimen_name':['pembrolizumab']*2
+        })
+        pd.testing.assert_frame_equal(output, expected)

@@ -1,10 +1,13 @@
 import pandas as pd
+import dask.dataframe as dd
+
+from rwd_analytics.lookups import Descendants, ConceptInfo,  Ingredient
 
 
-def last_activity_date(cohort, drug_exposure, condition_occurrence):
+def last_activity_date(cohort, omop_tables):
     subject = cohort.person_id.unique().tolist()
     tables = []
-    for table in [drug_exposure, condition_occurrence]:
+    for table in [omop_tables['drug_exposure'], omop_tables['condition_occurrence']]:
         if 'condition_concept_id' in table.columns:
             table  = table.rename(columns = {
                 'condition_start_datetime':'start_date'
@@ -84,32 +87,79 @@ def era_statistics(era):
     return era
 
 
+def line_generation_preprocess(cohort, ingredient_list, omop_tables):
+    subjects = cohort.person_id.unique().tolist()
+    descendants = Descendants()
+    ingredients = Ingredient()
+    drug_temp = omop_tables['drug_exposure'].loc[omop_tables['drug_exposure'].index.isin(subjects)]
+    drug_temp = drug_temp[drug_temp['drug_concept_id'].isin(descendants(ingredient_list))]
+    drug_temp = drug_temp.compute().reset_index()
+    drug_temp = ingredients(drug_temp)
+    drug_temp = dd.from_pandas(drug_temp, npartitions=1).set_index('person_id')
+    last_activity = last_activity_date(cohort, omop_tables)
+    cohort_enhanced = pd.merge(cohort, last_activity, how='left', on='person_id')
+    cohort_enhanced = dd.from_pandas(cohort_enhanced, npartitions=1).set_index('person_id')
+    return drug_temp, cohort_enhanced
+
+
+def false_after_lot(x):
+    x = x.sort_values(by=['time_from_start'])
+    first_false = x['is_in_line'].idxmin()
+    if not x['is_in_line'][first_false]:
+        x.loc[first_false:, 'is_in_line'] = False
+    return x
+
+
+def is_in_line(drug_code, regimen_codes):
+    """
+    fluorouracil = 955632
+    capecitabine = 1337620
+    leucovorin = 1388796
+    levoleucovorin = 40168303
+    """
+    substitutes = {
+        955632:[955632, 1337620],
+        1337620:[955632, 1337620],
+        1388796:[1388796, 40168303],
+        40168303:[1388796, 40168303]
+    }
+    if drug_code not in substitutes:
+        substitutes[drug_code] = [drug_code]
+
+    for substitute in substitutes[drug_code]:
+        if substitute in regimen_codes:
+            return True
+
+    # Addition of leucovorin or levoleucovorin does not advance the lot
+    return drug_code in [1388796, 40168303]
+
+
 class LinesOfTherapy():
-    def __init__(self, drug_exposure, eligible_therapies, index_date):
-        self.drug_exposure = drug_exposure
-        self.eligible_therapies = eligible_therapies
-        self.index_date = index_date
-        self.lines = self.__get_eligible_therapies(self.drug_exposure, self.eligible_therapies)
-        self.lines = self.__get_drugs(self.lines, self.index_date, offset=14)
+    def __init__(self, drug_temp, cohort, offset=14, nb_of_lines = 3):
+        self.drug_temp = drug_temp
+        self.index_date = cohort
+        self.lines = self.__get_drugs(self.drug_temp, self.index_date, offset)
         self.lines = self.lines.persist()
         self.lines['line_number'] = 0
+        self.nb_of_lines = nb_of_lines
 
-    def __get_eligible_therapies(self, df, eligible_therapies):
-        return df[df['drug_concept_id'].isin(eligible_therapies)]
-
-    def __get_drugs(self, df, index, offset=14):
+    def __get_drugs(self, df, index, offset):
         df = dd.merge(df, index, how='left', on='person_id')
         df = df[(df['drug_exposure_start_datetime'] - df['cohort_start_date']).dt.days >= -offset]
         return df[['drug_concept_id', 'drug_exposure_start_datetime']]
 
     def __get_lines(self, df, line_number):
         def add_paclitaxel_gemcitabine(x):
-            if (paclitaxel in x[0]) or (gemcitabine in x[0]):
+            """
+            Adding Paclitaxel (1378382) or Gemcitabine (1314924)
+            does not change the line of therapy
+            """
+            if (1378382 in x[0]) or (1314924 in x[0]):
                 g = list(set(x[1]).symmetric_difference(set(x[0])))
-                if paclitaxel in g:
-                    return np.append(x[0], paclitaxel)
-                elif gemcitabine in g:
-                    return np.append(x[0], gemcitabine)
+                if 1378382 in g:
+                    return np.append(x[0], 1378382)
+                elif 1314924 in g:
+                    return np.append(x[0], 1314924)
             return x[0]
         
         df = df.reset_index()
@@ -138,7 +188,7 @@ class LinesOfTherapy():
         tmp = []
         lines = self.lines
         
-        while line_number != 4:
+        while line_number != self.nb_of_lines+1:
             df = lines.map_partitions(self.__get_lines, line_number)
             temp = df[df['is_in_line'] == True][['person_id', 'start_date', 'regimen_codes', 'line_number']]
             lines = df[df['is_in_line'] == False][['person_id', 'drug_concept_id', 'drug_exposure_start_datetime']]
@@ -148,3 +198,35 @@ class LinesOfTherapy():
         lines_f = dd.concat(dfs)
         lines_f['regimen_codes'] = lines_f['regimen_codes'].astype(str)
         return lines_f.drop_duplicates()
+
+
+def listToString(s):  
+    str1 = ", " 
+    return (str1.join(s))
+
+
+class LineName():
+    def __init__(self, lot_f, concept_infos):
+        lot_f["regimen_codes"] = lot_f.regimen_codes.str.replace(" ", ',')
+        lot_f["regimen_codes"] = lot_f.regimen_codes.str.replace("[", "")
+        lot_f["regimen_codes"] = lot_f.regimen_codes.str.replace("]", "")
+
+        for index, row in concept_infos.iterrows():
+            lot_f["regimen_codes"] = lot_f.regimen_codes.str.replace(str(row['concept_id']), row['concept_name'])
+        self.lot = lot_f
+
+    def __call__(self):
+        self.lot['regimen_codes_sorted'] = self.lot['regimen_codes'].str.split(',')
+        self.lot = self.lot.reset_index(drop=True)
+        for index, row in self.lot.iterrows():
+            row['regimen_codes_sorted'].sort()
+            regimen_sorted = listToString(row['regimen_codes_sorted'])
+            self.lot.loc[index, 'regimen_codes_sorted'] = regimen_sorted
+
+        del self.lot['regimen_codes']
+        self.lot = self.lot.sort_values(by=['person_id', 'line_number'])
+        self.lot['regimen_codes_sorted'] = self.lot['regimen_codes_sorted'].map(
+            lambda x:', '.join([l.strip() for l in x.split(',') if l.strip() != '']))
+
+        return self.lot.rename(columns={'regimen_codes_sorted':'regimen_name'})
+    

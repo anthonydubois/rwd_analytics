@@ -7,24 +7,22 @@ from rwd_analytics.lookups import Descendants, ComorbidConditions
 
 
 class FeaturesSelection():
-    def __init__(self, cohort, features,
-                 drug_exposure, condition_occurrence, visit_occurrence, person, measurement, procedure):
+    def __init__(self, cohort, features, omop_tables):
         self.X = cohort
         self.subjects = self.X.person_id.unique().tolist()
         self.number_of_subjects = len(self.subjects)
         
         self.features = features
-        self.drug_exposure = drug_exposure
-        self.condition_occurrence = condition_occurrence[
-            ['condition_concept_id', 'condition_start_datetime']]
+        self.drug_exposure = omop_tables['drug_exposure']
+        self.condition_occurrence = omop_tables['condition_occurrence']
         self.condition_occurrence = self.condition_occurrence.rename(columns={
             'condition_concept_id':'concept_id',
             'condition_start_datetime':'start_date'
         })
-        self.visit_occurrence = visit_occurrence
-        self.measurement = measurement
-        self.procedure = procedure
-        person = person[['year_of_birth', 'gender_concept_id']]
+        self.visit_occurrence = omop_tables['visit_occurrence']
+        self.measurement = omop_tables['measurement']
+        self.procedure = omop_tables['procedure_occurrence']
+        person = omop_tables['person']
         self.comorbidities = ComorbidConditions()
         self.person = person.loc[self.subjects].compute()
         

@@ -12,22 +12,19 @@ class CohortBuilder():
     - 
     Warning: Put inclusion criteria before exclusion criteria
     """
-    def __init__(self, cohort_criteria, drug_exposure, condition_occurrence, person, observation_period, cohort=None):
-        self.conditions = condition_occurrence[
-            ['condition_concept_id', 'condition_start_datetime']]
+    def __init__(self, cohort_criteria, omop_tables, cohort=None):
+        self.conditions = omop_tables['condition_occurrence']
         self.conditions = self.conditions.rename(columns={
             'condition_concept_id':'concept_id',
             'condition_start_datetime':'cohort_start_date'
         })
-        self.drugs = drug_exposure[
-            ['drug_concept_id', 'drug_exposure_start_datetime']]
+        self.drugs = omop_tables['drug_exposure']
         self.drugs = self.drugs.rename(columns={
             'drug_concept_id':'concept_id',
             'drug_exposure_start_datetime':'cohort_start_date'
         })
-        self.person = person[['gender_concept_id', 'year_of_birth']]
-        self.obs_period = observation_period[
-            ['observation_period_start_date', 'observation_period_end_date']]
+        self.person = omop_tables['person']
+        self.obs_period = omop_tables['observation_period']
         self.descendants = Descendants()
         self.cohort_criteria = cohort_criteria
         if cohort is None:
