@@ -5,26 +5,21 @@ from rwd_analytics.lookups import Descendants, ConceptInfo,  Ingredient
 
 
 def last_activity_date(cohort, omop_tables):
-    subject = cohort.person_id.unique().tolist()
+    subject = cohort.person_id.tolist()
     tables = []
     for table in [omop_tables['drug_exposure'], omop_tables['condition_occurrence']]:
-        if 'condition_concept_id' in table.columns:
-            table  = table.rename(columns = {
-                'condition_start_datetime':'start_date'
-            })
-        elif 'drug_concept_id' in table.columns:
-            table  = table.rename(columns = {
-                'drug_exposure_start_datetime':'start_date'
-            })
-            
+        table  = table.rename(columns = {
+            'condition_start_datetime':'start_date',
+            'drug_exposure_start_datetime':'start_date'
+        }) 
         table = table.loc[table.index.isin(subject)]
         table = table[['start_date']]
-        table = table.compute().reset_index()
-        table = table.groupby('person_id').start_date.max().to_frame()
+        table = table.groupby('person_id').max().compute()
+        table = table.reset_index()
         tables.append(table)
     
     max_dates = pd.concat(tables)
-    max_dates = max_dates.groupby('person_id').start_date.max().to_frame()
+    max_dates = max_dates.groupby('person_id').max()
     max_dates.columns = ['last_activity_date']
     return max_dates.reset_index()
 
