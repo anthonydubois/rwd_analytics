@@ -22,9 +22,8 @@ class FeaturesSelection():
         self.visit_occurrence = omop_tables['visit_occurrence']
         self.measurement = omop_tables['measurement']
         self.procedure = omop_tables['procedure_occurrence']
-        person = omop_tables['person']
         self.comorbidities = ComorbidConditions()
-        self.person = person.loc[self.subjects].compute()
+        self.person = omop_tables['person']
         
     def __clean_features_by_occurrences(self):
         min_feat_occurrence = self.features['time_windows']['minimum']*self.number_of_subjects
@@ -37,9 +36,14 @@ class FeaturesSelection():
 
     def __non_time_bound_features(self):
         print('Getting non time bound features')
-        self.person = self.person
+        self.person = self.person.loc[self.person.index.isin(self.subjects)].compute()
+        
         self.X = self.X.merge(self.person, how='left', on='person_id')
+        print('We had to drop the following patients because they did not have a record in PERSON:')
+        print(self.X[self.X['year_of_birth'].isna()].person_id.tolist())
+        self.X = self.X[~self.X['year_of_birth'].isna()]
         self.X['age_at_index'] = self.X['cohort_start_date'].dt.year - self.X['year_of_birth']
+        print(self.X)
 
         if self.features['non_time_bound']['age_group'] == 1:
             age_groups = ['00-04', '05-09', '10-14', '15-19', '20-24', '25-29',
@@ -128,7 +132,10 @@ class FeaturesSelection():
             self.__feature_generator_timely(df, feature_name, 'short')
     
     def __call__(self):
-        self.__non_time_bound_features()
+        if self.features['non_time_bound']['age_group'] + \
+           self.features['non_time_bound']['age_at_index'] + \
+           self.features['non_time_bound']['gender'] != 0:
+           self.__non_time_bound_features()
 
         time_features = self.features['time_bound']['visit_count']
         if sum(time_features) > 0:

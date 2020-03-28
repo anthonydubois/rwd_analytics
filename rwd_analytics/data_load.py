@@ -43,9 +43,16 @@ def load_omop_table(dataset_path):
         },
         {
             'table':'measurement',
-            'isRequired':['measurement_concept_id', 'measurement_datetime'],
+            'isRequired':['measurement_concept_id', 'measurement_datetime', 'unit_source_value',
+                          'value_source_value', 'value_as_number', 'range_low', 'range_high'],
             'isDatetime':['measurement_datetime'],
             'isConceptId':['measurement_concept_id']
+        },
+        {
+            'table':'observation',
+            'isRequired':['observation_concept_id', 'observation_datetime'],
+            'isDatetime':['observation_datetime'],
+            'isConceptId':['observation_concept_id']
         }
     ]
     omop_files_tmp = []
@@ -72,7 +79,8 @@ def load_omop_table(dataset_path):
         'drug_exposure':omop_files_tmp[3],
         'visit_occurrence':omop_files_tmp[4],
         'observation_period':omop_files_tmp[5],
-        'measurement':omop_files_tmp[6]
+        'measurement':omop_files_tmp[6],
+        'observation':omop_files_tmp[7]
     }
     print ('***********  Data successfully loaded  ***********')
     return omop_tables

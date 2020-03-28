@@ -45,39 +45,6 @@ class ComorbidConditions():
         return self.comorbidities
 
 
-class ConceptInfo():
-    def __init__(self):
-        self.concept = dd.read_csv(OMOP_VOC_PATH+'CONCEPT.csv', sep="\t",
-                                   dtype={
-                                       'standard_concept': 'object',
-                                       'concept_code': 'object',
-                                       'concept_name': 'object',
-                                       'invalid_reason': 'object'
-                                       })
-    
-    def __call__(self, df, columns):
-        """
-        - df is a dataframe
-        - columns is a list of columns.
-            Valid columns:
-            - concept_name
-            - domain_id
-            - vocabulary_id
-            - concept_class_id
-            - standard_concept
-            - concept_code
-            - valid_start_date
-            - valid_end_date
-            - invalid_reason
-        """
-        concept_ids = df.concept_id.unique().tolist()
-        columns.append('concept_id')
-        temp = self.concept[columns]
-        temp = temp[temp['concept_id'].isin(concept_ids)]
-        temp = temp.compute()
-        return df.merge(temp[columns], how='left', on='concept_id')
-
-
 class Ingredient():
     def __init__(self):
         concept = dd.read_csv(OMOP_VOC_PATH+'CONCEPT.csv', sep="\t",
@@ -116,3 +83,59 @@ class ConceptRelationship():
     def __call__(self, concept_ids):
         tmp = self.concept_relationship[self.concept_relationship['concept_id_1'].isin(concept_ids)]
         return tmp.compute()
+
+
+class Concept():
+    def __init__(self):
+        self.concept = dd.read_csv(OMOP_VOC_PATH+'CONCEPT.csv', sep="\t",
+                                   dtype={
+                                       'standard_concept': 'object',
+                                       'concept_code': 'object',
+                                       'concept_name': 'object',
+                                       'invalid_reason': 'object'
+                                       })
+
+    def search_for_concept_by_name(self, search_value_string, domain_id=None, standard_concept='S'):
+        """
+        - search_value_string is a string
+        """
+        search_value_string = search_value_string.lower()
+        self.concept['concept_name'] = self.concept['concept_name'].fillna('')
+        df = self.concept[self.concept['concept_name'].str.lower().str.contains(search_value_string)]
+        if standard_concept is not None:
+            df = df[df['standard_concept']==standard_concept]
+        if domain_id is not None:
+            df = df[df['domain_id']==domain_id]
+        return df.compute()
+
+    def get_unique_concept_name(self, concept_id):
+        c = self.concept[self.concept['concept_id']==concept_id].reset_index().compute()
+        return c.at[0, 'concept_name']
+    
+    def get_info(self, df, columns):
+        """
+        - df is a dataframe
+        - columns is a list of columns.
+            Valid columns:
+            - concept_name
+            - domain_id
+            - vocabulary_id
+            - concept_class_id
+            - standard_concept
+            - concept_code
+            - valid_start_date
+            - valid_end_date
+            - invalid_reason
+        """
+        df = df.rename(columns={
+            'condition_concept_id':'concept_id',
+            'drug_concept_id':'concept_id',
+            'measurement_concept_id':'concept_id',
+            'observation_concept_id':'concept_id'
+        })
+        concept_ids = df.concept_id.unique().tolist()
+        columns.append('concept_id')
+        temp = self.concept[columns]
+        temp = temp[temp['concept_id'].isin(concept_ids)]
+        temp = temp.compute()
+        return df.merge(temp[columns], how='left', on='concept_id')

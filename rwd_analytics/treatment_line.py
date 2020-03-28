@@ -1,7 +1,8 @@
 import pandas as pd
 import dask.dataframe as dd
+import numpy as np
 
-from rwd_analytics.lookups import Descendants, ConceptInfo,  Ingredient
+from rwd_analytics.lookups import Descendants, Concept,  Ingredient
 
 
 def last_activity_date(cohort, omop_tables):
@@ -83,17 +84,15 @@ def era_statistics(era):
 
 
 def line_generation_preprocess(cohort, ingredient_list, omop_tables):
-    subjects = cohort.person_id.unique().tolist()
+    subjects = cohort.person_id.tolist()
     descendants = Descendants()
     ingredients = Ingredient()
     drug_temp = omop_tables['drug_exposure'].loc[omop_tables['drug_exposure'].index.isin(subjects)]
     drug_temp = drug_temp[drug_temp['drug_concept_id'].isin(descendants(ingredient_list))]
     drug_temp = drug_temp.compute().reset_index()
     drug_temp = ingredients(drug_temp)
-    drug_temp = dd.from_pandas(drug_temp, npartitions=1).set_index('person_id')
     last_activity = last_activity_date(cohort, omop_tables)
     cohort_enhanced = pd.merge(cohort, last_activity, how='left', on='person_id')
-    cohort_enhanced = dd.from_pandas(cohort_enhanced, npartitions=1).set_index('person_id')
     return drug_temp, cohort_enhanced
 
 
@@ -130,23 +129,37 @@ def is_in_line(drug_code, regimen_codes):
 
 
 class LinesOfTherapy():
-    def __init__(self, drug_temp, cohort, offset=14, nb_of_lines = 3):
+    """
+    Return lines of therapy compiled.
+
+    Parameters:
+    - drug_temp is a pandas dataframe
+    - cohort is a pandas dataframe
+    """
+    def __init__(self, drug_temp, cohort, ingredient_list, offset=14, nb_of_lines = 3):
+        drug_temp['drug_exposure_start_datetime'] = pd.to_datetime(drug_temp['drug_exposure_start_datetime'])
+        cohort['cohort_start_date'] = pd.to_datetime(cohort['cohort_start_date'])
         self.drug_temp = drug_temp
         self.index_date = cohort
+        treatments_df = pd.DataFrame({'concept_id':ingredient_list})
+        self.concept_infos = Concept().get_info(treatments_df, ['concept_name'])
         self.lines = self.__get_drugs(self.drug_temp, self.index_date, offset)
-        self.lines = self.lines.persist()
+        #self.lines = self.lines.persist()
         self.lines['line_number'] = 0
         self.nb_of_lines = nb_of_lines
 
     def __get_drugs(self, df, index, offset):
-        df = dd.merge(df, index, how='left', on='person_id')
+        df = pd.merge(df, index, how='left', on='person_id')
+        df['drug_exposure_start_datetime'] = pd.to_datetime(df['drug_exposure_start_datetime'])
+        df['cohort_start_date'] = pd.to_datetime(df['cohort_start_date'])
         df = df[(df['drug_exposure_start_datetime'] - df['cohort_start_date']).dt.days >= -offset]
-        return df[['drug_concept_id', 'drug_exposure_start_datetime']]
+        return df[['person_id', 'drug_concept_id', 'drug_exposure_start_datetime']]
 
     def __get_lines(self, df, line_number):
         def add_paclitaxel_gemcitabine(x):
             """
             Adding Paclitaxel (1378382) or Gemcitabine (1314924)
+            to a Gemcitabine-based therapy (or vice versa)
             does not change the line of therapy
             """
             if (1378382 in x[0]) or (1314924 in x[0]):
@@ -161,10 +174,10 @@ class LinesOfTherapy():
         start_line = df.groupby(['person_id'])['drug_exposure_start_datetime'].min().to_frame('start_date')
         df = df.merge(start_line, how='left', on='person_id')
         df['time_from_start'] = (df['drug_exposure_start_datetime'] - df['start_date']).dt.days
-        regimen_codes = df[df['time_from_start'] <= 28].groupby('person_id').drug_concept_id.unique().to_frame('regimen_codes_28')
-        df = df.merge(regimen_codes, how='left', on='person_id')
-        regimen_codes = df[df['time_from_start'] <= 90].groupby('person_id').drug_concept_id.unique().to_frame('regimen_codes_90')
-        df = df.merge(regimen_codes, how='left', on='person_id')    
+        for time_from_start in [28, 90]:
+            regimen_codes = df[df['time_from_start'] <= time_from_start].groupby(
+                'person_id').drug_concept_id.unique().to_frame('regimen_codes_'+str(time_from_start))
+            df = df.merge(regimen_codes, how='left', on='person_id')
         df['regimen_codes'] = df['regimen_codes_28']
         df['tmp'] = list(zip(df['regimen_codes_28'], df['regimen_codes_90']))
         df['regimen_codes'] = df['tmp'].map(add_paclitaxel_gemcitabine)
@@ -177,6 +190,25 @@ class LinesOfTherapy():
         df['line_number'] = df['line_number'].astype(int)
         return df
     
+    def __add_end_date(self, lot, cohort_enhanced):
+        lot = lot.sort_values(by=['person_id', 'start_date'])
+        lot['flag_person'] = lot['person_id'].shift(-1)
+        lot['flag_person'] = (lot['flag_person'] == lot['person_id'])
+        lot['end_date'] = lot['start_date'].shift(-1)
+        lot['end_date'] = lot['end_date'] - pd.to_timedelta(1, unit='D')
+        lot = lot.merge(cohort_enhanced, how='left', on='person_id')
+        del lot['cohort_start_date']
+        a = lot[lot['flag_person'] == True]
+        b = lot[lot['flag_person'] == False]
+        del a['last_activity_date']
+        del b['end_date']
+        b = b.rename(columns={'last_activity_date':'end_date'})
+        lot = pd.concat([a, b])
+        del lot['flag_person']
+        lot = lot.sort_values(by=['person_id', 'line_number'])
+        lot['end_date'] = pd.to_datetime(lot['end_date'])
+        return lot
+    
     def __call__(self):
         line_number = 1
         dfs = []
@@ -184,15 +216,22 @@ class LinesOfTherapy():
         lines = self.lines
         
         while line_number != self.nb_of_lines+1:
-            df = lines.map_partitions(self.__get_lines, line_number)
+            #df = lines.map_partitions(self.__get_lines, line_number)
+            df = self.__get_lines(lines, line_number)
             temp = df[df['is_in_line'] == True][['person_id', 'start_date', 'regimen_codes', 'line_number']]
             lines = df[df['is_in_line'] == False][['person_id', 'drug_concept_id', 'drug_exposure_start_datetime']]
             dfs.append(temp)
+            if len(lines) == 0:
+                break
             line_number = line_number + 1
 
-        lines_f = dd.concat(dfs)
+        print('Maximum number of lines included: '+ str(line_number))
+        lines_f = pd.concat(dfs)
         lines_f['regimen_codes'] = lines_f['regimen_codes'].astype(str)
-        return lines_f.drop_duplicates()
+        lines_f = lines_f.drop_duplicates()
+        lines_f = self.__add_end_date(lines_f, self.index_date)
+        lines_f =  LineName(lines_f, self.concept_infos)()
+        return lines_f[['person_id', 'line_number', 'regimen_name', 'start_date', 'end_date']]
 
 
 def listToString(s):  
@@ -225,3 +264,27 @@ class LineName():
 
         return self.lot.rename(columns={'regimen_codes_sorted':'regimen_name'})
     
+
+def agg_lot_by_patient(lot):
+    lot1 = lot[lot['line_number']==1]
+    lot2 = lot[lot['line_number']==2]
+    lot3 = lot[lot['line_number']==3]
+    del lot1['line_number']
+    del lot2['line_number']
+    del lot3['line_number']
+    lot12 = lot1.merge(lot2, on = 'person_id', how= 'left')
+    lot123 = lot12.merge(lot3, on = 'person_id', how= 'left')
+    lot123['regimen_name_y']= lot123['regimen_name_y'].fillna('no 2L')
+    lot123['regimen_name']= lot123['regimen_name'].fillna('no 3L')
+    lot123 = lot123.rename(columns={
+        'regimen_name_x': 'regimen 1L',
+        'regimen_name_y': 'regimen 2L',
+        'regimen_name': 'regimen 3L',
+        'start_date_x': 'start_date 1L',
+        'start_date_y': 'start_date 2L',
+        'start_date': 'start_date 3L',
+        'end_date_x': 'end_date 1L',
+        'end_date_y': 'end_date 2L',
+        'end_date': 'end_date 3L'
+    })
+    return lot123

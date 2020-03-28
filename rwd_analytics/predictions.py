@@ -14,3 +14,31 @@ from sklearn.tree import DecisionTreeClassifier
 from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier, GradientBoostingClassifier
 from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
+
+from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import NearestNeighbors
+
+
+def get_matching_pairs(treated_df_input, non_treated_df_input, distance_max = 2.5, scaler=True):
+    treated_df = treated_df_input.copy()
+    non_treated_df = non_treated_df_input.copy()
+    del treated_df['person_id']
+    del non_treated_df['person_id']
+    treated_x = treated_df.values
+    non_treated_x = non_treated_df.values
+    if scaler == True:
+        scaler = StandardScaler()
+    if scaler:
+        scaler.fit(treated_x)
+        treated_x = scaler.transform(treated_x)
+        non_treated_x = scaler.transform(non_treated_x)
+
+    nbrs = NearestNeighbors(n_neighbors=len(treated_df), algorithm='ball_tree').fit(treated_x)
+    distances, indices = nbrs.kneighbors(non_treated_x)
+    t = pd.DataFrame(distances, index=['distances'])
+    t = t.append(pd.DataFrame(indices, index=['indices']))
+    t = t.T
+    t['indices'] = t['indices'].astype(int)
+    near_patients = t[t['distances'] < distance_max].indices.unique().tolist()
+    matched = treated_df_input.loc[near_patients]
+    return matched.reset_index(drop=True)
