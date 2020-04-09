@@ -1,5 +1,9 @@
 import dask.dataframe as dd
 import pandas as pd
+import s3fs
+
+from datetime import datetime
+fs = s3fs.S3FileSystem()
 
 def load_omop_table(dataset_path):
     omop_table_field = [
@@ -84,3 +88,40 @@ def load_omop_table(dataset_path):
     }
     print ('***********  Data successfully loaded  ***********')
     return omop_tables
+
+
+def data_extractor(cohort, data_path, output_path=None, output_format='csv'):
+    """
+    This function extracts all records of all patients in cohort.
+    cohort: output of CohortBuilder()
+    input_path: raw data or omop in parquet format 
+        indexed on patient ID (ENROLID, PATIENT_ID, PERSON_ID, etc.)
+    output_path: where the files are being saved
+    output_format: 'csv', 'parquet'
+    """
+    subjects = cohort.patient_id.unique().tolist()
+    content = [f'{f_path}' for f_path in fs.ls(data_path)]
+    tables = [l.split('/')[-1].lower() for l in content]
+
+    if ('condition_occurrence' in tables) or ('inpatient_services' in tables):
+        tables = tables
+    elif 'rx_fact' in tables:
+        # TODO: should take into account reference tables
+        tables = ['rx_fact', 'dx_fact']
+    else:
+        return 'Format to extract not detected'
+
+    for table in tables:
+        print(table)
+        try:
+            df = dd.read_parquet(data_path + table, engine='pyarrow')
+        except:
+            df = dd.read_parquet(data_path + table.upper(), engine='pyarrow')
+            
+        df = df.loc[df.index.isin(subjects)]
+        df = df.compute()
+        if output_path is not None:
+            if output_format == 'csv':
+                df.to_csv(output_path+table+'.csv')
+            if output_format == 'parquet':
+                df.to_parquet(output_path+table)

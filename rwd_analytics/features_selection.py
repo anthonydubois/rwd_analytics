@@ -1,8 +1,16 @@
 import pandas as pd
+import numpy as np
 import dask.dataframe as dd
 
 from sklearn.feature_selection import SelectKBest
 from sklearn.feature_selection import chi2
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.feature_selection import RFE
+from sklearn.linear_model import LogisticRegression
+from sklearn.feature_selection import SelectFromModel
+from sklearn.ensemble import RandomForestClassifier
+from lightgbm import LGBMClassifier
+
 from rwd_analytics.lookups import Descendants, ComorbidConditions
 
 
@@ -268,3 +276,93 @@ def get_features_scores(df, n_features):
     featureScores['Score'] = featureScores['Score'].round(2)
     return featureScores.nlargest(n_features, 'Score')
 
+
+class CovariateSelection():
+    def __init__(self, algorithm, X, y, num_feats):
+        """
+        algorithm:
+        - Pearson Correlation: 'pearson_correlation'
+        - Chi-Squared: 'chi_squared'
+        - Recursive Feature Elimination: 'recursive_feature_elimination'
+        - Lasso: SelectFromModel: 'lasso'
+        - Random Forest: SelectFromModel: 'random_forest'
+        - LightGBM: SelectFromModel:: 'lgbc'
+        - All: 'all'
+        """
+        self.X = X
+        self.X_norm = MinMaxScaler().fit_transform(self.X)
+        self.y = y
+        self.num_feats = num_feats
+        self.algorithm = algorithm
+        self.feature_name = self.X.columns.tolist()
+
+    def __cor_selector(self):
+        cor_list = []
+        # calculate the correlation with y for each feature
+        for i in self.X.columns.tolist():
+            cor = np.corrcoef(self.X[i], self.y)[0, 1]
+            cor_list.append(cor)
+        # replace NaN with 0
+        cor_list = [0 if np.isnan(i) else i for i in cor_list]
+        # feature name
+        cor_feature = self.X.iloc[:,np.argsort(np.abs(cor_list))[-self.num_feats:]].columns.tolist()
+        # feature selection? 0 for not select, 1 for select
+        cor_support = [True if i in cor_feature else False for i in self.feature_name]
+        return cor_support, cor_feature
+    
+    
+    def __call__(self):
+        if self.algorithm in ['pearson_correlation', 'all']:
+            cor_support, cor_feature = self.__cor_selector()
+            print(str(len(cor_feature)), 'selected features')
+
+        if self.algorithm in ['chi_squared', 'all']:
+            chi_selector = SelectKBest(chi2, k=self.num_feats)
+            chi_selector.fit(self.X_norm, self.y)
+            chi_support = chi_selector.get_support()
+            chi_feature = self.X.loc[:,chi_support].columns.tolist()
+            print(str(len(chi_feature)), 'selected features')
+
+        if self.algorithm in ['recursive_feature_elimination', 'all']:
+            rfe_selector = RFE(estimator=LogisticRegression(), n_features_to_select=self.num_feats, step=10, verbose=5)
+            rfe_selector.fit(self.X_norm, self.y)
+            rfe_support = rfe_selector.get_support()
+            rfe_feature = self.X.loc[:,rfe_support].columns.tolist()
+            print(str(len(rfe_feature)), 'selected features')
+
+        if self.algorithm in ['lasso', 'all']:
+            embeded_lr_selector = SelectFromModel(LogisticRegression(penalty="l1"), max_features=self.num_feats)
+            embeded_lr_selector.fit(self.X_norm, self.y)
+            embeded_lr_support = embeded_lr_selector.get_support()
+            embeded_lr_feature = self.X.loc[:,embeded_lr_support].columns.tolist()
+            print(str(len(embeded_lr_feature)), 'selected features')
+
+        if self.algorithm in ['random_forest', 'all']:
+            embeded_rf_selector = SelectFromModel(RandomForestClassifier(n_estimators=100), max_features=self.num_feats)
+            embeded_rf_selector.fit(self.X, self.y)
+
+            embeded_rf_support = embeded_rf_selector.get_support()
+            embeded_rf_feature = self.X.loc[:,embeded_rf_support].columns.tolist()
+            print(str(len(embeded_rf_feature)), 'selected features')
+
+        if self.algorithm in ['lgbc', 'all']:
+            lgbc=LGBMClassifier(n_estimators=500, learning_rate=0.05, num_leaves=32, colsample_bytree=0.2,
+            reg_alpha=3, reg_lambda=1, min_split_gain=0.01, min_child_weight=40)
+
+            embeded_lgb_selector = SelectFromModel(lgbc, max_features=self.num_feats)
+            embeded_lgb_selector.fit(self.X, self.y)
+
+            embeded_lgb_support = embeded_lgb_selector.get_support()
+            embeded_lgb_feature = self.X.loc[:,embeded_lgb_support].columns.tolist()
+            print(str(len(embeded_lgb_feature)), 'selected features')
+
+        if self.algorithm in ['all']:
+            # put all selection together
+            feature_selection_df = pd.DataFrame({'Feature':self.feature_name, 'Pearson':cor_support, 'Chi-2':chi_support, 'RFE':rfe_support,
+                                                 'Logistics':embeded_lr_support, 'Random Forest':embeded_rf_support, 'LightGBM':embeded_lgb_support})
+            # count the selected times for each feature
+            feature_selection_df['Total'] = np.sum(feature_selection_df, axis=1)
+            # display the top 100
+            feature_selection_df = feature_selection_df.sort_values(['Total','Feature'] , ascending=False)
+            feature_selection_df.index = range(1, len(feature_selection_df)+1)
+            return feature_selection_df.head(self.num_feats)
