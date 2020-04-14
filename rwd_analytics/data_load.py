@@ -15,7 +15,7 @@ def load_omop_table(dataset_path):
         },
         {
             'table':'condition_occurrence',
-            'isRequired':['condition_concept_id', 'condition_start_datetime'
+            'isRequired':['condition_concept_id', 'condition_start_datetime',
                             'condition_source_value', 'condition_source_concept_id'],
             'isDatetime':['condition_start_datetime'],
             'isConceptId':['condition_concept_id', 'condition_source_concept_id']
