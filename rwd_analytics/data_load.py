@@ -15,21 +15,24 @@ def load_omop_table(dataset_path):
         },
         {
             'table':'condition_occurrence',
-            'isRequired':['condition_concept_id', 'condition_start_datetime'],
+            'isRequired':['condition_concept_id', 'condition_start_datetime'
+                            'condition_source_value', 'condition_source_concept_id'],
             'isDatetime':['condition_start_datetime'],
-            'isConceptId':['condition_concept_id']
+            'isConceptId':['condition_concept_id', 'condition_source_concept_id']
         },
         {
             'table':'procedure_occurrence',
-            'isRequired':['procedure_concept_id', 'procedure_datetime'],
+            'isRequired':['procedure_concept_id', 'procedure_datetime',
+                            'procedure_source_value', 'procedure_source_concept_id'],
             'isDatetime':['procedure_datetime'],
-            'isConceptId':['procedure_concept_id']
+            'isConceptId':['procedure_concept_id', 'procedure_source_concept_id']
         },
         {
             'table':'drug_exposure',
-            'isRequired':['drug_concept_id', 'drug_exposure_start_datetime'],
+            'isRequired':['drug_concept_id', 'drug_exposure_start_datetime',
+                            'drug_source_value', 'drug_source_concept_id'],
             'isDatetime':['drug_exposure_start_datetime'],
-            'isConceptId':['drug_concept_id']
+            'isConceptId':['drug_concept_id', 'drug_source_concept_id']
         },
         {
             'table':'visit_occurrence',

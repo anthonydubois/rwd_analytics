@@ -99,165 +99,199 @@ omop_tables = {
 
 class TestCohort():
     def test_gender(self):
-        cohort_criteria = {
-            'criteria':[
-                {
-                    'concept_type':'gender',
-                    'concept_id':[8507],
-                    'excluded':0,
-                    'descendant':0,
-                    'mapped':0,
-                    'attributes':[]
-                }
-            ]
+        cohort_definition = {
+            'demographic_criteria':{
+                'min_year_of_birth':None,
+                'max_year_of_birth':None,
+                'gender_concept_id':[8507]
+            },
+            'criteria_list':[
+            ],
+            'observation_period_criteria':{
+                'before_index':None,
+                'after_index':None
+            }
         }
-        output = CohortBuilder(cohort_criteria, omop_tables)()
+        output = CohortBuilder(cohort_definition, omop_tables)()
         output = output.reset_index(drop=True)
         expected = pd.DataFrame({
             'person_id':[2, 4, 5],
-            'cohort_start_date':[
-                pd.to_datetime('1990-01-01'),
-                pd.to_datetime('1990-01-01'),
-                pd.to_datetime('1990-01-01')
+            'index_date':[
+                pd.to_datetime('1970-01-01'),
+                pd.to_datetime('1970-01-01'),
+                pd.to_datetime('1970-01-01')
             ]
         })
         pd.testing.assert_frame_equal(output, expected)
-
+        
     def test_condition(self):
-        cohort_criteria = {
-            'criteria':[
+        cohort_definition = {
+            'demographic_criteria':{
+                'min_year_of_birth':None,
+                'max_year_of_birth':None,
+                'gender_concept_id':None
+            },
+            'criteria_list':[
                 {
-                    'concept_type':'condition',
+                    'concept_type':'condition_occurrence',
                     'concept_id':[3],
-                    'excluded':0,
-                    'descendant':0,
-                    'mapped':0,
-                    'attributes':[]
+                    'is_excluded':0,
+                    'get_descendants':0,
+                    'occurrence_start_date':None,
+                    'occurrence_end_date':None,
+                    'min_occurrence':None,
+                    'min_duration':None,
+                    'is_before_previous_criteria':None,
+                    'is_after_previous_criteria':None
                 }
-            ]
+            ],
+            'observation_period_criteria':{
+                'before_index':None,
+                'after_index':None
+            }
         }
-        output = CohortBuilder(cohort_criteria, omop_tables)()
+        output = CohortBuilder(cohort_definition, omop_tables)()
         expected = pd.DataFrame({
             'person_id':[1],
-            'cohort_start_date':[
+            'index_date':[
                 pd.to_datetime('2017-12-10')
             ]
         })
         pd.testing.assert_frame_equal(output, expected)
-
+        
+        
     def test_multiple_criteria(self):
-        cohort_criteria = {
-            'criteria':[
+        cohort_definition = {
+            'demographic_criteria':{
+                'min_year_of_birth':None,
+                'max_year_of_birth':None,
+                'gender_concept_id':[8507]
+            },
+            'criteria_list':[
                 {
-                    'concept_type':'gender',
-                    'concept_id':[8507],
-                    'excluded':0,
-                    'descendant':0,
-                    'mapped':0,
-                    'attributes':[]
-                },
-                {
-                    'concept_type':'condition',
+                    'concept_type':'condition_occurrence',
                     'concept_id':[44831230],
-                    'excluded':0,
-                    'descendant':0,
-                    'mapped':0,
-                    'attributes':[]
+                    'is_excluded':0,
+                    'get_descendants':0,
+                    'occurrence_start_date':None,
+                    'occurrence_end_date':None,
+                    'min_occurrence':None,
+                    'min_duration':None,
+                    'is_before_previous_criteria':None,
+                    'is_after_previous_criteria':None
                 }
-            ]
+            ],
+            'observation_period_criteria':{
+                'before_index':None,
+                'after_index':None
+            }
         }
-        output = CohortBuilder(cohort_criteria, omop_tables)()
+        output = CohortBuilder(cohort_definition, omop_tables)()
         expected = pd.DataFrame({
             'person_id':[2],
-            'cohort_start_date':[
+            'index_date':[
                 pd.to_datetime('2017-12-10')
             ]
         })
         pd.testing.assert_frame_equal(output, expected)
 
     def test_year_of_birth(self):
-        cohort_criteria = {
-            'criteria':[
-                {
-                    'concept_type':'year_of_birth',
-                    'concept_id':[],
-                    'excluded':0,
-                    'descendant':0,
-                    'mapped':0,
-                    'attributes':[
-                        {
-                            'type':'inferior or equal',
-                            'bound':2000
-                        },
-                        {
-                            'type':'superior or equal',
-                            'bound':1970
-                        }
-                    ]
-                }
-            ]
+        cohort_definition = {
+            'demographic_criteria':{
+                'min_year_of_birth':1970,
+                'max_year_of_birth':2000,
+                'gender_concept_id':None
+            },
+            'criteria_list':[
+            ],
+            'observation_period_criteria':{
+                'before_index':None,
+                'after_index':None
+            }
         }
-        output = CohortBuilder(cohort_criteria, omop_tables)()
+        output = CohortBuilder(cohort_definition, omop_tables)()
         output = output.reset_index(drop=True)
         expected = pd.DataFrame({
             'person_id':[1, 2, 4],
-            'cohort_start_date':[
-                pd.to_datetime('1990-01-01'),
-                pd.to_datetime('1990-01-01'),
-                pd.to_datetime('1990-01-01')
+            'index_date':[
+                pd.to_datetime('1970-01-01'),
+                pd.to_datetime('1970-01-01'),
+                pd.to_datetime('1970-01-01')
             ]
         })
         pd.testing.assert_frame_equal(output, expected)
 
     def test_previous_cohort(self):
-        cohort_criteria = {
-            'criteria':[
+        cohort_definition = {
+            'demographic_criteria':{
+                'min_year_of_birth':None,
+                'max_year_of_birth':None,
+                'gender_concept_id':None
+            },
+            'criteria_list':[
                 {
-                    'concept_type':'drug',
+                    'concept_type':'drug_exposure',
                     'concept_id':[10],
-                    'excluded':0,
-                    'descendant':0,
-                    'mapped':0,
-                    'attributes':[]
+                    'is_excluded':0,
+                    'get_descendants':0,
+                    'occurrence_start_date':None,
+                    'occurrence_end_date':None,
+                    'min_occurrence':None,
+                    'min_duration':None,
+                    'is_before_previous_criteria':None,
+                    'is_after_previous_criteria':None
                 }
-            ]
+            ],
+            'observation_period_criteria':{
+                'before_index':None,
+                'after_index':None
+            }
         }
         cohort = pd.DataFrame({
             'person_id':[1],
-            'cohort_start_date':[pd.to_datetime('1990-01-01', format='%Y-%m-%d')]
+            'index_date':[pd.to_datetime('1990-01-01', format='%Y-%m-%d')]
         })
-        output = CohortBuilder(cohort_criteria, omop_tables, cohort)()
+        output = CohortBuilder(cohort_definition, omop_tables, cohort)()
         output = output.reset_index(drop=True)
         expected = pd.DataFrame({
             'person_id':[1],
-            'cohort_start_date':[
+            'index_date':[
                 pd.to_datetime('2017-12-10')
             ]
         })
         pd.testing.assert_frame_equal(output, expected)
 
     def test_observation_period(self):
-        cohort_criteria = {
-            'criteria':[
+        cohort_definition = {
+            'demographic_criteria':{
+                'min_year_of_birth':None,
+                'max_year_of_birth':None,
+                'gender_concept_id':None
+            },
+            'criteria_list':[
                 {
-                    'concept_type':'condition',
+                    'concept_type':'condition_occurrence',
                     'concept_id':[44831230],
-                    'excluded':0,
-                    'descendant':0,
-                    'mapped':0,
-                    'attributes':[]
+                    'is_excluded':0,
+                    'get_descendants':0,
+                    'occurrence_start_date':None,
+                    'occurrence_end_date':None,
+                    'min_occurrence':None,
+                    'min_duration':None,
+                    'is_before_previous_criteria':None,
+                    'is_after_previous_criteria':None
                 }
             ],
-            'observation_period':{
+            'observation_period_criteria':{
                 'before_index':365,
-                'after_index':0
+                'after_index':None
             }
         }
-        output = CohortBuilder(cohort_criteria, omop_tables)()
+        output = CohortBuilder(cohort_definition, omop_tables)()
         output = output.reset_index(drop=True)
         expected = pd.DataFrame({
             'person_id':[1],
-            'cohort_start_date':[
+            'index_date':[
                 pd.to_datetime('2017-12-10')
             ]
         })
@@ -277,22 +311,30 @@ class TestCohort():
             ]
         })
         drug_exposure = dd.from_pandas(drug_exposure, npartitions=1).set_index('person_id')
-        cohort_criteria = {
-            'criteria':[
+        cohort_definition = {
+            'demographic_criteria':{
+                'min_year_of_birth':None,
+                'max_year_of_birth':None,
+                'gender_concept_id':None
+            },
+            'criteria_list':[
                 {
-                    'concept_type':'drug',
-                    'concept_id':[10], # Irinotecan liposomal
-                    'excluded':0,
-                    'descendant':0,
-                    'mapped':0,
-                    'attributes':[
-                        {
-                            'type':'occurrence',
-                            'min':2
-                        }
-                    ]
+                    'concept_type':'drug_exposure',
+                    'concept_id':[10],
+                    'is_excluded':0,
+                    'get_descendants':0,
+                    'occurrence_start_date':None,
+                    'occurrence_end_date':None,
+                    'min_occurrence':2,
+                    'min_duration':None,
+                    'is_before_previous_criteria':None,
+                    'is_after_previous_criteria':None
                 }
-            ]
+            ],
+            'observation_period_criteria':{
+                'before_index':None,
+                'after_index':None
+            }
         }
         omop_tables = {
             'person':person,
@@ -303,10 +345,10 @@ class TestCohort():
             'observation_period':observation_period,
             'measurement':measurement
         }
-        output = CohortBuilder(cohort_criteria, omop_tables)()
+        output = CohortBuilder(cohort_definition, omop_tables)()
         expected = pd.DataFrame({
             'person_id':[1],
-            'cohort_start_date':[pd.to_datetime('2017-12-10', format = '%Y-%m-%d')]
+            'index_date':[pd.to_datetime('2017-12-10', format = '%Y-%m-%d')]
         })
         pd.testing.assert_frame_equal(output, expected)
 
@@ -337,29 +379,45 @@ class TestCohort():
         })
         condition_occurrence = dd.from_pandas(condition_occurrence, npartitions=1).set_index('person_id')
         drug_exposure = dd.from_pandas(drug_exposure, npartitions=1).set_index('person_id')
-
-        cohort_criteria = {
-            'criteria':[
+        
+        cohort_definition = {
+            'demographic_criteria':{
+                'min_year_of_birth':None,
+                'max_year_of_birth':None,
+                'gender_concept_id':None
+            },
+            'criteria_list':[
                 {
-                    'concept_type':'condition',
+                    'concept_type':'condition_occurrence',
                     'concept_id':[44831230],
-                    'excluded':0,
-                    'descendant':0,
-                    'mapped':0,
-                    'attributes':[]
+                    'is_excluded':0,
+                    'get_descendants':0,
+                    'occurrence_start_date':None,
+                    'occurrence_end_date':None,
+                    'min_occurrence':None,
+                    'min_duration':None,
+                    'is_before_previous_criteria':None,
+                    'is_after_previous_criteria':None
                 },
                 {
-                    'concept_type':'drug',
+                    'concept_type':'drug_exposure',
                     'concept_id':[10],
-                    'excluded':0,
-                    'descendant':0,
-                    'mapped':0,
-                    'attributes':[{
-                        'type':'before'
-                    }]
+                    'is_excluded':0,
+                    'get_descendants':0,
+                    'occurrence_start_date':None,
+                    'occurrence_end_date':None,
+                    'min_occurrence':None,
+                    'min_duration':None,
+                    'is_before_previous_criteria':1,
+                    'is_after_previous_criteria':None
                 }
-            ]
+            ],
+            'observation_period_criteria':{
+                'before_index':None,
+                'after_index':None
+            }
         }
+
         omop_tables = {
             'person':person,
             'condition_occurrence':condition_occurrence,
@@ -369,14 +427,14 @@ class TestCohort():
             'observation_period':observation_period,
             'measurement':measurement
         }
-        output = CohortBuilder(cohort_criteria, omop_tables)()
+        output = CohortBuilder(cohort_definition, omop_tables)()
         expected = pd.DataFrame({
             'person_id':[1],
-            'cohort_start_date':[pd.to_datetime('2018-12-10')]
+            'index_date':[pd.to_datetime('2018-12-10')]
         })
         pd.testing.assert_frame_equal(output, expected)
 
-    def test_attributes_min_lenght(self):
+    def test_attributes_min_length(self):
         drug_exposure = pd.DataFrame({
             'person_id':[1, 1, 1, 1, 2, 2],
             'drug_concept_id':[10, 10, 30, 40, 10, 20],
@@ -390,21 +448,32 @@ class TestCohort():
             ]
         })
         drug_exposure = dd.from_pandas(drug_exposure, npartitions=1).set_index('person_id')
-        cohort_criteria = {
-            'criteria':[
+        cohort_definition = {
+            'demographic_criteria':{
+                'min_year_of_birth':None,
+                'max_year_of_birth':None,
+                'gender_concept_id':None
+            },
+            'criteria_list':[
                 {
-                    'concept_type':'drug',
-                    'concept_id': [10],
-                    'excluded': 0,
-                    'descendant':0,
-                    'mapped':0,
-                    'attributes':[{
-                        'type':'length',
-                        'min':100
-                    }]
+                    'concept_type':'drug_exposure',
+                    'concept_id':[10],
+                    'is_excluded':0,
+                    'get_descendants':0,
+                    'occurrence_start_date':None,
+                    'occurrence_end_date':None,
+                    'min_occurrence':None,
+                    'min_duration':100,
+                    'is_before_previous_criteria':None,
+                    'is_after_previous_criteria':None
                 }
-            ]
+            ],
+            'observation_period_criteria':{
+                'before_index':None,
+                'after_index':None
+            }
         }
+
         omop_tables = {
             'person':person,
             'condition_occurrence':condition_occurrence,
@@ -414,10 +483,10 @@ class TestCohort():
             'observation_period':observation_period,
             'measurement':measurement
         }
-        output = CohortBuilder(cohort_criteria, omop_tables)()
+        output = CohortBuilder(cohort_definition, omop_tables)()
         expected = pd.DataFrame({
             'person_id':[1],
-            'cohort_start_date':[pd.to_datetime('2017-12-10')]
+            'index_date':[pd.to_datetime('2017-12-10')]
         })
         pd.testing.assert_frame_equal(output, expected)
 
