@@ -39,11 +39,17 @@ class CohortBuilder():
             self.cohort['index_date'] = pd.to_datetime('1970-01-01')
 
         for criteria in self.cohort_definition['criteria_list']:
+            try:
+                criteria['mapped']
+            except:
+                criteria['mapped'] = 0
             tmp = self.omop_tables[criteria['concept_type']]
             tmp = tmp.rename(columns={
                 'condition_concept_id':'concept_id',
+                'condition_source_concept_id':'source_concept_id',
                 'condition_start_datetime':'start_date',
                 'drug_concept_id':'concept_id',
+                'drug_source_concept_id':'source_concept_id',
                 'drug_exposure_start_datetime':'start_date'
             })
             len_cohort = len(self.cohort)
@@ -54,9 +60,13 @@ class CohortBuilder():
             # Filtering by concept ID
             if criteria['concept_id']:
                 concept_ids = criteria['concept_id']
-                if criteria['get_descendants'] == 1:
-                    concept_ids = self.descendants(concept_ids)
-                tmp = tmp[tmp['concept_id'].isin(concept_ids)]
+                if criteria['mapped'] == 1:
+                    tmp = tmp[tmp['source_concept_id'].isin(concept_ids)]
+                else:
+                    if criteria['get_descendants'] == 1:
+                        concept_ids = self.descendants(concept_ids)
+                    tmp = tmp[tmp['concept_id'].isin(concept_ids)]
+
             
             # Filtering by date
             if criteria['occurrence_start_date']:
