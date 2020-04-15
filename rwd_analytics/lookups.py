@@ -147,4 +147,4 @@ class Concept():
         Parameters: - concept_ids: a list of concept_ids
         """
         df = self.concept[self.concept['concept_id'].isin(concept_ids)]
-        return df.compute()
+        return df.compute().reset_index()
