@@ -139,3 +139,12 @@ class Concept():
         temp = temp[temp['concept_id'].isin(concept_ids)]
         temp = temp.compute()
         return df.merge(temp[columns], how='left', on='concept_id')
+
+    def __call__(self, concept_ids):
+        """
+        Returns all information about concept ids
+
+        Parameters: - concept_ids: a list of concept_ids
+        """
+        df = self.concept[self.concept['concept_id'].isin(concept_ids)]
+        return df.compute()
