@@ -6,6 +6,55 @@ import math
 from rwd_analytics.lookups import Descendants, Concept
 
 
+class Cohort():
+    def __init__(self, omop_tables, cohort):
+        self.cohort = cohort
+        self.subject = cohort.person_id.tolist()
+        self.omop_tables = omop_tables
+
+    def information(self):
+        df = self.omop_tables['person']
+        try:
+            df = df.loc[subject].compute().reset_index()
+        except:
+            df = df.loc[df.index.isin(self.subject)].compute().reset_index()
+
+        df = self.cohort.merge(df, how='left', on='person_id')
+        information = {}
+        
+        # Getting age information
+        df = df[~df['year_of_birth'].isna()]
+        df['age_at_index'] = df['index_date'].dt.year - df['year_of_birth']
+        information['age_at_index'] = df.age_at_index.value_counts().to_frame('count') \
+                    .reset_index().rename(columns={'index':'age_at_index'})
+        
+        print('********** Age at index *************')
+        print(df.age_at_index.value_counts())
+
+        #Getting gender information
+        gender_map = {
+            8532:'Female',
+            8507:'Male'
+        }
+        df['gender_concept_id'] = df['gender_concept_id'].map(gender_map)
+        information['gender_concept_id'] = df.gender_concept_id.value_counts().to_frame('count') \
+                    .reset_index().rename(columns={'index':'gender_concept_id'})
+        
+        print('')
+        print('********** Gender *******************')
+        print(df.gender_concept_id.value_counts())
+        
+        #Getting incidence information
+        information['index_date'] = df.index_date.dt.year.value_counts().to_frame('count') \
+                    .reset_index().rename(columns={'index':'index_date'})
+        
+        print('')
+        print('********** New cases per year *******')
+        print(df.index_date.dt.year.value_counts())
+        
+        return information
+
+
 class CohortBuilder():
     def __init__(self, cohort_definition, omop_tables, cohort=None):
         self.omop_tables = omop_tables

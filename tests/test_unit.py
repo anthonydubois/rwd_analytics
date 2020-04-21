@@ -2,7 +2,7 @@ import pandas as pd
 import dask.dataframe as dd
 import pytest
 
-from rwd_analytics.cohort import CohortBuilder, get_distribution
+from rwd_analytics.cohort import CohortBuilder, get_distribution, Cohort
 from rwd_analytics.treatment_line import EraCalculation, last_activity_date, line_generation_preprocess, LinesOfTherapy, LineName, agg_lot_by_patient
 from rwd_analytics.features_selection import FeaturesSelection, time_at_risk, get_features_scores
 from rwd_analytics.lookups import Descendants, Concept, ConceptRelationship, ComorbidConditions, Ingredient
@@ -98,6 +98,37 @@ omop_tables = {
 
 
 class TestCohort():
+    def test_cohort_information(self):
+        cohort = pd.DataFrame({
+            'person_id':[1, 2, 3],
+            'index_date':[
+                pd.to_datetime('2015-10-01'),
+                pd.to_datetime('2015-10-01'),
+                pd.to_datetime('2015-10-01')
+            ]
+        })
+        information = Cohort(omop_tables, cohort).information()
+        output_age = information['age_at_index']
+        output_gender = information['gender_concept_id']
+        output_index = information['index_date']
+        expected_age = pd.DataFrame({
+            'age_at_index':[15, 5, 25],
+            'count':[1]*3
+        })
+        expected_gender = pd.DataFrame({
+            'gender_concept_id':['Female', 'Male'],
+            'count':[2, 1]
+        })
+        expected_index = pd.DataFrame({
+            'index_date':[2015],
+            'count':[3]
+        })
+        pd.testing.assert_frame_equal(output_age, expected_age)
+        pd.testing.assert_frame_equal(output_gender, expected_gender)
+        pd.testing.assert_frame_equal(output_index, expected_index)
+
+
+class TestCohortBuilder():
     def test_distribution_standard(self):
         drug_exposure = pd.DataFrame({
             'person_id':[1, 1, 1, 1, 2, 2],
