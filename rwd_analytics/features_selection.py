@@ -36,7 +36,7 @@ class FeaturesSelection():
     def __clean_features_by_occurrences(self):
         min_feat_occurrence = self.features['time_windows']['minimum']*self.number_of_subjects
         for (columnName, columnData) in self.X.iteritems():
-            if columnName in ['person_id', 'cohort_start_date']:
+            if columnName in ['person_id', 'index_date']:
                 continue
                 
             if columnData.values.sum() < min_feat_occurrence:
@@ -44,13 +44,16 @@ class FeaturesSelection():
 
     def __non_time_bound_features(self):
         print('Getting non time bound features')
-        self.person = self.person.loc[self.person.index.isin(self.subjects)].compute()
+        try:
+            self.person = self.person.loc[self.subjects].compute()
+        except:
+            self.person = self.person.loc[self.person.index.isin(self.subjects)].compute()
         
         self.X = self.X.merge(self.person, how='left', on='person_id')
         print('We had to drop the following patients because they did not have a record in PERSON:')
         print(self.X[self.X['year_of_birth'].isna()].person_id.tolist())
         self.X = self.X[~self.X['year_of_birth'].isna()]
-        self.X['age_at_index'] = self.X['cohort_start_date'].dt.year - self.X['year_of_birth']
+        self.X['age_at_index'] = self.X['index_date'].dt.year - self.X['year_of_birth']
         print(self.X)
 
         if self.features['non_time_bound']['age_group'] == 1:
@@ -121,10 +124,15 @@ class FeaturesSelection():
                     self.X[t] = self.X[t].where(self.X['person_id'].isin(subjects), 0)
 
     def __feature_generator(self, df, feature_name, time_features):
-        df = df.loc[df.index.isin(self.subjects)]
-        df = df.compute()
+        try:
+            # Much faster
+            df = df.loc[self.subjects].compute()
+        except:
+            # In case of all patients not in index
+            df = df.loc[df.index.isin(self.subjects)].compute()
+
         df = df.merge(self.X, how='inner', on='person_id')
-        df['time_to_index'] = (df['cohort_start_date'] - df['start_date']).dt.days
+        df['time_to_index'] = (df['index_date'] - df['start_date']).dt.days
         df = df[df['time_to_index'] > 0]
 
         if time_features[0] == 1:
@@ -245,8 +253,8 @@ class FeaturesSelection():
 def time_at_risk(X, cohort_at_risk, cohort_target, time_at_risk = 0):
     cohort_at_risk = cohort_at_risk.merge(cohort_target, how='inner', on='person_id')
     if time_at_risk != 0:
-        cohort_at_risk['time_to_event'] = cohort_at_risk['cohort_start_date_y'] \
-                                          - cohort_at_risk['cohort_start_date_x']
+        cohort_at_risk['time_to_event'] = cohort_at_risk['index_date_y'] \
+                                          - cohort_at_risk['index_date_x']
         cohort_at_risk = cohort_at_risk[cohort_at_risk['time_to_event'].dt.days < time_at_risk]
     cohort_at_risk = cohort_at_risk.person_id.unique().tolist()
     print('Subject at risk:'+ str(len(cohort_at_risk)))
@@ -254,7 +262,7 @@ def time_at_risk(X, cohort_at_risk, cohort_target, time_at_risk = 0):
     X['target'] = X['target'].where(X['person_id'].isin(cohort_at_risk), 0)
     print('Number of patients in final cohort: '+str(len(X)))
     del X['person_id']
-    del X['cohort_start_date']
+    del X['index_date']
     return X
 
 

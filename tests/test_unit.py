@@ -2,7 +2,7 @@ import pandas as pd
 import dask.dataframe as dd
 import pytest
 
-from rwd_analytics.cohort import CohortBuilder
+from rwd_analytics.cohort import CohortBuilder, get_distribution
 from rwd_analytics.treatment_line import EraCalculation, last_activity_date, line_generation_preprocess, LinesOfTherapy, LineName, agg_lot_by_patient
 from rwd_analytics.features_selection import FeaturesSelection, time_at_risk, get_features_scores
 from rwd_analytics.lookups import Descendants, Concept, ConceptRelationship, ComorbidConditions, Ingredient
@@ -98,6 +98,118 @@ omop_tables = {
 
 
 class TestCohort():
+    def test_distribution_standard(self):
+        drug_exposure = pd.DataFrame({
+            'person_id':[1, 1, 1, 1, 2, 2],
+            'drug_source_concept_id':[1510703, 1125315, 1125315, 40, 1125315, 1510703],
+            'drug_concept_id':[1510703, 20, 1125315, 40, 1125315, 20],
+            'drug_exposure_start_datetime':[
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-12'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+            ]
+        })
+        drug_exposure = dd.from_pandas(drug_exposure, npartitions=1).set_index('person_id')
+        omop_tables = {
+            'person':person,
+            'condition_occurrence':condition_occurrence,
+            'procedure_occurrence':procedure,
+            'drug_exposure':drug_exposure,
+            'visit_occurrence':visit_occurrence,
+            'observation_period':observation_period,
+            'measurement':measurement
+        }
+        output=get_distribution(omop_tables, [1510703, 1125315], '2017-12-09',
+                                '2017-12-11', level='standard', cohort=None)
+        expected = pd.DataFrame({
+            'concept_id':[1125315, 1510703],
+            'concept_code':['161', '2047647'],
+            'vocabulary_id':['RxNorm']*2,
+            'concept_name':['Acetaminophen', 'Helleborus extract'],
+            'n_unique_patients':[1, 1],
+            'n_records':[1, 1]
+        })
+        pd.testing.assert_frame_equal(output, expected)
+
+    def test_distribution_source(self):
+        drug_exposure = pd.DataFrame({
+            'person_id':[1, 1, 1, 1, 2, 2],
+            'drug_source_concept_id':[1510703, 1125315, 1125315, 40, 1125315, 1510703],
+            'drug_concept_id':[1510703, 20, 1125315, 40, 1125315, 20],
+            'drug_exposure_start_datetime':[
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-12'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+            ]
+        })
+        drug_exposure = dd.from_pandas(drug_exposure, npartitions=1).set_index('person_id')
+        omop_tables = {
+            'person':person,
+            'condition_occurrence':condition_occurrence,
+            'procedure_occurrence':procedure,
+            'drug_exposure':drug_exposure,
+            'visit_occurrence':visit_occurrence,
+            'observation_period':observation_period,
+            'measurement':measurement
+        }
+        output = get_distribution(omop_tables, [1510703, 1125315], start_date=None,
+                                end_date=None, level='source', cohort=None)
+        expected = pd.DataFrame({
+            'concept_id':[1125315, 1510703],
+            'concept_code':['161', '2047647'],
+            'vocabulary_id':['RxNorm']*2,
+            'concept_name':['Acetaminophen', 'Helleborus extract'],
+            'n_unique_patients':[2, 2],
+            'n_records':[3, 2]
+        })
+        pd.testing.assert_frame_equal(output, expected)
+
+    def test_distribution_cohort_filter(self):
+        drug_exposure = pd.DataFrame({
+            'person_id':[1, 1, 1, 1, 2, 2],
+            'drug_source_concept_id':[1510703, 1125315, 1125315, 40, 1125315, 1510703],
+            'drug_concept_id':[1510703, 20, 1125315, 40, 1125315, 20],
+            'drug_exposure_start_datetime':[
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-12'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+                pd.to_datetime('2017-12-10'),
+            ]
+        })
+        drug_exposure = dd.from_pandas(drug_exposure, npartitions=1).set_index('person_id')
+        omop_tables = {
+            'person':person,
+            'condition_occurrence':condition_occurrence,
+            'procedure_occurrence':procedure,
+            'drug_exposure':drug_exposure,
+            'visit_occurrence':visit_occurrence,
+            'observation_period':observation_period,
+            'measurement':measurement
+        }
+        cohort = pd.DataFrame({
+            'person_id':[1],
+            'index_date':[pd.to_datetime('2016-01-01')]
+        })
+        output = get_distribution(omop_tables, [1510703, 1125315], '2017-12-09',
+                                '2017-12-11', level='source', cohort=cohort)
+        expected = pd.DataFrame({
+            'concept_id':[1125315, 1510703],
+            'concept_code':['161', '2047647'],
+            'vocabulary_id':['RxNorm']*2,
+            'concept_name':['Acetaminophen', 'Helleborus extract'],
+            'n_unique_patients':[1, 1],
+            'n_records':[1, 1]
+        })
+        pd.testing.assert_frame_equal(output, expected)
+
     def test_gender(self):
         cohort_definition = {
             'demographic_criteria':{
@@ -495,7 +607,7 @@ class TestFeaturesSelection():
     def test_feature_age_gender(self):
         cohort = pd.DataFrame({
             'person_id':[1, 2, 3, 4, 5, 6],
-            'cohort_start_date':[
+            'index_date':[
                 pd.to_datetime('2018-01-01'),
                 pd.to_datetime('2018-01-01'),
                 pd.to_datetime('2018-01-01'),
@@ -531,7 +643,7 @@ class TestFeaturesSelection():
 
         expected = pd.DataFrame({
             'person_id':[1, 2, 3, 4, 5],
-            'cohort_start_date':[pd.to_datetime('2018-01-01')]*5,
+            'index_date':[pd.to_datetime('2018-01-01')]*5,
             'age_at_index':[28, 18, 8, 48, 58],
             'gender = female':[1, 0, 1, 0, 0]
         })
@@ -544,7 +656,7 @@ class TestFeaturesSelection():
     def test_feature_age_group_minimum(self):
         cohort = pd.DataFrame({
             'person_id':[1, 2, 3, 4, 5],
-            'cohort_start_date':[
+            'index_date':[
                 pd.to_datetime('2018-01-01'),
                 pd.to_datetime('2018-01-01'),
                 pd.to_datetime('2018-01-01'),
@@ -579,7 +691,7 @@ class TestFeaturesSelection():
 
         expected = pd.DataFrame({
             'person_id': [1, 2, 3, 4, 5],
-            'cohort_start_date': [pd.to_datetime('2018-01-01')]*5,
+            'index_date': [pd.to_datetime('2018-01-01')]*5,
             '05-09': [0, 0, 1, 0, 0],
             '15-19': [0, 1, 0, 0, 0],
             '25-29': [1, 0, 0, 0, 0],
@@ -594,7 +706,7 @@ class TestFeaturesSelection():
     def test_feature_conditions(self):
         cohort = pd.DataFrame({
             'person_id':[1, 2, 3, 4, 5],
-            'cohort_start_date':[
+            'index_date':[
                 pd.to_datetime('2018-01-01'),
                 pd.to_datetime('2018-01-01'),
                 pd.to_datetime('2018-01-01'),
@@ -629,7 +741,7 @@ class TestFeaturesSelection():
 
         expected = pd.DataFrame({
             'person_id': [1, 2, 3, 4, 5],
-            'cohort_start_date': [pd.to_datetime('2018-01-01')]*5,
+            'index_date': [pd.to_datetime('2018-01-01')]*5,
             '44831230_inf': [1, 1, 0, 0, 0],
             '2_inf':[1, 1, 0, 0, 0],
             '3_inf':[1, 0, 0, 0, 0],
@@ -655,7 +767,7 @@ class TestFeaturesSelection():
     def test_feature_visit_count(self):
         cohort = pd.DataFrame({
             'person_id':[1, 2, 3, 4, 5],
-            'cohort_start_date':[
+            'index_date':[
                 pd.to_datetime('2018-01-01'),
                 pd.to_datetime('2018-01-01'),
                 pd.to_datetime('2018-01-01'),
@@ -690,7 +802,7 @@ class TestFeaturesSelection():
 
         expected = pd.DataFrame({
             'person_id':[1, 2, 3, 4, 5],
-            'cohort_start_date':[pd.to_datetime('2018-01-01')]*5,
+            'index_date':[pd.to_datetime('2018-01-01')]*5,
             'visit_count_med':[1, 0, 0, 0, 0]
         })
         output = FeaturesSelection(cohort, features, omop_tables)()
@@ -700,7 +812,7 @@ class TestFeaturesSelection():
     def test_feature_comorbidities(self):
         cohort = pd.DataFrame({
             'person_id':[1, 2, 3, 4, 5],
-            'cohort_start_date':[
+            'index_date':[
                 pd.to_datetime('2018-01-01'),
                 pd.to_datetime('2018-01-01'),
                 pd.to_datetime('2018-01-01'),
@@ -735,7 +847,7 @@ class TestFeaturesSelection():
 
         expected = pd.DataFrame({
             'person_id':[1, 2, 3, 4, 5],
-            'cohort_start_date':[pd.to_datetime('2018-01-01')]*5,
+            'index_date':[pd.to_datetime('2018-01-01')]*5,
             'congestive_heart_failure_med':[0, 0, 1, 0, 0],
             'valvular_disease_med':[0, 0, 0, 1, 0],
             'hypertension,complicated_med':[0, 0, 1, 0, 0]
@@ -772,7 +884,7 @@ def test_time_at_risk():
     cohort = pd.DataFrame({
         'cohort_definition_id':[1, 1, 1, 1, 1, 2, 2, 2],
         'person_id':[1, 2, 3, 4, 5, 1, 2, 3],
-        'cohort_start_date':[
+        'index_date':[
             pd.to_datetime('2018-01-01'),
             pd.to_datetime('2018-01-01'),
             pd.to_datetime('2018-01-01'),
@@ -888,7 +1000,7 @@ class TestEraCalculation():
     def test_era_without_concept(self):
         cohort = pd.DataFrame({
             'person_id':[1, 2, 3],
-            'cohort_start_date':[
+            'index_date':[
                 pd.to_datetime('2018-01-01'),
                 pd.to_datetime('2018-01-01'),
                 pd.to_datetime('2018-01-01')
@@ -927,7 +1039,7 @@ class TestEraCalculation():
     def test_era_with_concept(self):
         cohort = pd.DataFrame({
             'person_id':[1, 2, 3],
-            'cohort_start_date':[
+            'index_date':[
                 pd.to_datetime('2018-01-01'),
                 pd.to_datetime('2018-01-01'),
                 pd.to_datetime('2018-01-01')
@@ -1030,7 +1142,7 @@ class TestTreatmentLine():
     def test_line_generation(self):
         cohort = pd.DataFrame({
             'person_id':[1, 2],
-            'cohort_start_date':[
+            'index_date':[
                 pd.to_datetime('2017-11-17', format='%Y-%m-%d'),
                 pd.to_datetime('2017-11-17', format='%Y-%m-%d')
             ]
@@ -1079,7 +1191,7 @@ class TestTreatmentLine():
     def test_lot_generation_2(self):
         cohort = pd.DataFrame({
             'person_id':[1, 2, 3],
-            'cohort_start_date':[
+            'index_date':[
                 pd.to_datetime('2017-01-10', format='%Y-%m-%d'),
                 pd.to_datetime('2017-11-17', format='%Y-%m-%d'),
                 pd.to_datetime('2019-01-01', format='%Y-%m-%d')

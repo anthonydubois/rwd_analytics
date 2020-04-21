@@ -95,12 +95,13 @@ def load_omop_table(dataset_path):
 
 def data_extractor(cohort, data_path, output_path=None, output_format='csv'):
     """
-    This function extracts all records of all patients in cohort.
-    cohort: output of CohortBuilder()
-    input_path: raw data or omop in parquet format 
-        indexed on patient ID (ENROLID, PATIENT_ID, PERSON_ID, etc.)
-    output_path: where the files are being saved
-    output_format: 'csv', 'parquet'
+    This function extracts all records of all patients in a cohort.
+    Parameters:
+        - cohort: output of CohortBuilder()
+        - input_path: "raw data" or "omop" in parquet format 
+                indexed on patient ID (ENROLID, PATIENT_ID, PERSON_ID, etc.)
+        - output_path: where the files are being saved
+        - output_format: 'csv', 'parquet'
     """
     subjects = cohort.patient_id.unique().tolist()
     content = [f'{f_path}' for f_path in fs.ls(data_path)]
@@ -114,17 +115,30 @@ def data_extractor(cohort, data_path, output_path=None, output_format='csv'):
     else:
         return 'Format to extract not detected'
 
+    dfs = {}
+
     for table in tables:
         print(table)
         try:
             df = dd.read_parquet(data_path + table, engine='pyarrow')
         except:
             df = dd.read_parquet(data_path + table.upper(), engine='pyarrow')
-            
-        df = df.loc[df.index.isin(subjects)]
-        df = df.compute()
+        
+        try:
+            # Much faster but does not always work
+            df = df.loc[subjects].compute()
+        except:
+            df = df.loc[df.index.isin(subjects)].compute()
+
         if output_path is not None:
             if output_format == 'csv':
                 df.to_csv(output_path+table+'.csv')
+                print(table+' has been saved in CSV format')
             if output_format == 'parquet':
                 df.to_parquet(output_path+table)
+                print(table+' has been saved in PARQUET format')
+        else:
+            dfs[table] = df
+
+    if output_path is None:
+        return dfs

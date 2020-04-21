@@ -138,7 +138,7 @@ class LinesOfTherapy():
     """
     def __init__(self, drug_temp, cohort, ingredient_list, offset=14, nb_of_lines = 3):
         drug_temp['drug_exposure_start_datetime'] = pd.to_datetime(drug_temp['drug_exposure_start_datetime'])
-        cohort['cohort_start_date'] = pd.to_datetime(cohort['cohort_start_date'])
+        cohort['index_date'] = pd.to_datetime(cohort['index_date'])
         self.drug_temp = drug_temp
         self.index_date = cohort
         treatments_df = pd.DataFrame({'concept_id':ingredient_list})
@@ -151,8 +151,8 @@ class LinesOfTherapy():
     def __get_drugs(self, df, index, offset):
         df = pd.merge(df, index, how='left', on='person_id')
         df['drug_exposure_start_datetime'] = pd.to_datetime(df['drug_exposure_start_datetime'])
-        df['cohort_start_date'] = pd.to_datetime(df['cohort_start_date'])
-        df = df[(df['drug_exposure_start_datetime'] - df['cohort_start_date']).dt.days >= -offset]
+        df['index_date'] = pd.to_datetime(df['index_date'])
+        df = df[(df['drug_exposure_start_datetime'] - df['index_date']).dt.days >= -offset]
         return df[['person_id', 'drug_concept_id', 'drug_exposure_start_datetime']]
 
     def __get_lines(self, df, line_number):
@@ -197,7 +197,7 @@ class LinesOfTherapy():
         lot['end_date'] = lot['start_date'].shift(-1)
         lot['end_date'] = lot['end_date'] - pd.to_timedelta(1, unit='D')
         lot = lot.merge(cohort_enhanced, how='left', on='person_id')
-        del lot['cohort_start_date']
+        del lot['index_date']
         a = lot[lot['flag_person'] == True]
         b = lot[lot['flag_person'] == False]
         del a['last_activity_date']
