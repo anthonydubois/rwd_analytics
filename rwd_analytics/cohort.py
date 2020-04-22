@@ -14,7 +14,7 @@ class Cohort():
         self.subject = cohort.person_id.tolist()
         self.omop_tables = omop_tables
 
-    def demographics(self):
+    def demographics(self, show=False):
         df = self.omop_tables['person']
         try:
             df = df.loc[subject].compute().reset_index()
@@ -43,13 +43,14 @@ class Cohort():
         demo['index_date'] = df.index_date.dt.year.value_counts().to_frame('count') \
                     .reset_index().rename(columns={'index':'index_date'})
         
-        f, axes = plt.subplots(1, 3, figsize=(13, 5))
-        sns.set(style="whitegrid")
-        sns.barplot(x="index_date", y="count", data=demo['index_date'], ax=axes[0])
-        sns.lineplot(x="age_at_index", y="count", data=demo['age_at_index'], ax=axes[1])
-        sns.barplot(x="gender_concept_id", y="count", data=demo['gender_concept_id'], ax=axes[2])
-        plt.setp(axes, yticks=[])
-        plt.tight_layout()
+        if show == True:
+            f, axes = plt.subplots(1, 3, figsize=(13, 5))
+            sns.set(style="whitegrid")
+            sns.barplot(x="index_date", y="count", data=demo['index_date'], ax=axes[0])
+            sns.lineplot(x="age_at_index", y="count", data=demo['age_at_index'], ax=axes[1])
+            sns.barplot(x="gender_concept_id", y="count", data=demo['gender_concept_id'], ax=axes[2])
+            plt.setp(axes, yticks=[])
+            plt.tight_layout()
         
         return demo
 
