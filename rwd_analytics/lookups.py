@@ -94,6 +94,7 @@ class Concept():
                                        'concept_name': 'object',
                                        'invalid_reason': 'object'
                                        })
+        self.concept_relationship = dd.read_csv(OMOP_VOC_PATH+'CONCEPT_RELATIONSHIP.csv', sep="\t")
 
     def search_for_concept_by_name(self, search_value_string, domain_id=None, standard_concept='S'):
         """
@@ -139,6 +140,11 @@ class Concept():
         temp = temp[temp['concept_id'].isin(concept_ids)]
         temp = temp.compute()
         return df.merge(temp[columns], how='left', on='concept_id')
+
+    def get_standard(self, concept_ids):
+        df = self.concept_relationship[self.concept_relationship['concept_id_1'].isin(concept_ids)]
+        df = df[(df['relationship_id'] == 'Maps to') & (df['invalid_reason'].isnull())]
+        return df.concept_id_2.unique().compute().tolist()
 
     def __call__(self, concept_ids):
         """
