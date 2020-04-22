@@ -1,8 +1,10 @@
 import pandas as pd
 import dask.dataframe as dd
 import numpy as np
+import seaborn as sns
 import math
 
+from matplotlib import pyplot as plt
 from rwd_analytics.lookups import Descendants, Concept
 
 
@@ -12,7 +14,7 @@ class Cohort():
         self.subject = cohort.person_id.tolist()
         self.omop_tables = omop_tables
 
-    def information(self):
+    def demographics(self):
         df = self.omop_tables['person']
         try:
             df = df.loc[subject].compute().reset_index()
@@ -20,16 +22,13 @@ class Cohort():
             df = df.loc[df.index.isin(self.subject)].compute().reset_index()
 
         df = self.cohort.merge(df, how='left', on='person_id')
-        information = {}
+        demo = {}
         
         # Getting age information
         df = df[~df['year_of_birth'].isna()]
         df['age_at_index'] = df['index_date'].dt.year - df['year_of_birth']
-        information['age_at_index'] = df.age_at_index.value_counts().to_frame('count') \
+        demo['age_at_index'] = df.age_at_index.value_counts().to_frame('count') \
                     .reset_index().rename(columns={'index':'age_at_index'})
-        
-        print('********** Age at index *************')
-        print(df.age_at_index.value_counts())
 
         #Getting gender information
         gender_map = {
@@ -37,22 +36,22 @@ class Cohort():
             8507:'Male'
         }
         df['gender_concept_id'] = df['gender_concept_id'].map(gender_map)
-        information['gender_concept_id'] = df.gender_concept_id.value_counts().to_frame('count') \
+        demo['gender_concept_id'] = df.gender_concept_id.value_counts().to_frame('count') \
                     .reset_index().rename(columns={'index':'gender_concept_id'})
         
-        print('')
-        print('********** Gender *******************')
-        print(df.gender_concept_id.value_counts())
-        
         #Getting incidence information
-        information['index_date'] = df.index_date.dt.year.value_counts().to_frame('count') \
+        demo['index_date'] = df.index_date.dt.year.value_counts().to_frame('count') \
                     .reset_index().rename(columns={'index':'index_date'})
         
-        print('')
-        print('********** New cases per year *******')
-        print(df.index_date.dt.year.value_counts())
+        f, axes = plt.subplots(1, 3, figsize=(13, 5))
+        sns.set(style="whitegrid")
+        sns.barplot(x="index_date", y="count", data=demo['index_date'], ax=axes[0])
+        sns.lineplot(x="age_at_index", y="count", data=demo['age_at_index'], ax=axes[1])
+        sns.barplot(x="gender_concept_id", y="count", data=demo['gender_concept_id'], ax=axes[2])
+        plt.setp(axes, yticks=[])
+        plt.tight_layout()
         
-        return information
+        return demo
 
 
 class CohortBuilder():
@@ -119,12 +118,13 @@ class CohortBuilder():
             
             # Filtering by concept ID
             if criteria['concept_id']:
-                print('Criteria: '+str(criteria['concept_id']))
                 concept_ids = criteria['concept_id']
                 if criteria['mapped'] == 1:
+                    print('Criteria: getting source concept IDs '+str(criteria['concept_id']))
                     tmp = tmp[tmp['source_concept_id'].isin(concept_ids)]
                 else:
                     if criteria['get_descendants'] == 1:
+                        print('Criteria: getting descenant of standard concept IDs '+str(criteria['concept_id']))
                         concept_ids = self.descendants(concept_ids)
                     tmp = tmp[tmp['concept_id'].isin(concept_ids)]
 

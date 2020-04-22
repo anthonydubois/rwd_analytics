@@ -107,7 +107,7 @@ class TestCohort():
                 pd.to_datetime('2015-10-01')
             ]
         })
-        information = Cohort(omop_tables, cohort).information()
+        information = Cohort(omop_tables, cohort).demographics()
         output_age = information['age_at_index']
         output_gender = information['gender_concept_id']
         output_index = information['index_date']

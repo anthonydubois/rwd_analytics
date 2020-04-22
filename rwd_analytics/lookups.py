@@ -141,6 +141,10 @@ class Concept():
         temp = temp.compute()
         return df.merge(temp[columns], how='left', on='concept_id')
 
+    def get_concept_id(self, concept_code):
+        df = self.concept[self.concept['concept_code'].isin(concept_code)]
+        return df.concept_id.unique().compute().tolist()
+
     def get_standard(self, concept_ids):
         df = self.concept_relationship[self.concept_relationship['concept_id_1'].isin(concept_ids)]
         df = df[(df['relationship_id'] == 'Maps to') & (df['invalid_reason'].isnull())]
