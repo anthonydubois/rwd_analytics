@@ -97,7 +97,7 @@ class ConceptRelationship():
             - concept_ids is a list of standards concept IDS
         """
         df = self.concept_relationship[self.concept_relationship['concept_id_1'].isin(concept_ids)]
-        df = df[(df['relationship_id'] == 'Maps from') & (df['invalid_reason'].isnull())]
+        df = df[(df['relationship_id'] == 'Mapped from') & (df['invalid_reason'].isnull())]
         return df.concept_id_2.unique().compute().tolist()
 
     def __call__(self, concept_ids):
