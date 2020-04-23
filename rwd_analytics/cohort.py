@@ -223,14 +223,15 @@ class CohortBuilder():
         return self.cohort[['person_id', 'index_date']]
     
 
-def get_distribution(omop_tables, concept_ids, start_date=None, end_date=None, level='source', cohort=None):
+def get_distribution(omop_tables, concept_ids, start_date=None, end_date=None, cohort=None):
     """
-    parameters: - omop_tables
-                - concepts_ids: list of standard or non standard concept ids
-                - start_date: format %Y-%m-%d
-                - end_date: format %Y-%m-%d
-                - level: 'source' or 'standard'
-                - cohort: optinal - can accelerate compute
+    Returns nb of occurrences of given concept IDs in the database
+    Parameters:
+        - omop_tables
+        - concepts_ids: list of homogeneous standard or non standard concept ids
+        - start_date: format %Y-%m-%d
+        - end_date: format %Y-%m-%d
+        - cohort: optinal - can accelerate compute
     """
     concept = Concept()
     concept_info = concept(concept_ids)
@@ -262,19 +263,10 @@ def get_distribution(omop_tables, concept_ids, start_date=None, end_date=None, l
     
     if standard == 'S':
         concept_id_level = 'concept_id'
-        concept_ids = Descendants()(concept_ids)
     else:
         concept_id_level = 'source_concept_id'
-        concept_ids = ConceptRelationship().get_non_standard(concept_ids)
 
-    df = df[df[concept_id_level].isin(concept_ids)]
-
-    if level == 'source':
-        concept_id_level = 'source_concept_id'
-    elif level == 'standard':
-        concept_id_level = 'concept_id'
-    else:
-        return 'Could not determined level parameters'    
+    df = df[df[concept_id_level].isin(concept_ids)]   
         
     if start_date:
         df = df[df['start_date']>=pd.to_datetime(start_date)]
