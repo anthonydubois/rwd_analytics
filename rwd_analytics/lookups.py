@@ -1,7 +1,10 @@
 import pandas as pd
 import dask.dataframe as dd
+import os
 
-OMOP_VOC_PATH = 'resources/omop_voc/'
+from rwd_analytics.conf import settings
+
+OMOP_VOC_PATH = settings.OMOP_VOC_PATH
 
 
 class Descendants():
@@ -77,8 +80,11 @@ class Ingredient():
 
 
 class ConceptRelationship():
-    def __init__(self):
+    def __init__(self, concept_id_1=None):
         self.concept_relationship = dd.read_csv(OMOP_VOC_PATH+'CONCEPT_RELATIONSHIP.csv', sep="\t")
+        if concept_id_1:
+            self.concept_relationship = \
+                self.concept_relationship[self.concept_relationship['concept_id_1'].isin(concept_id_1)]
 
     def get_standard(self, concept_ids):
         """
@@ -106,7 +112,7 @@ class ConceptRelationship():
 
 
 class Concept():
-    def __init__(self):
+    def __init__(self, vocabulary_id=None):
         self.concept = dd.read_csv(OMOP_VOC_PATH+'CONCEPT.csv', sep="\t",
                                    dtype={
                                        'standard_concept': 'object',
@@ -115,6 +121,8 @@ class Concept():
                                        'invalid_reason': 'object'
                                        })
         self.concept_relationship = dd.read_csv(OMOP_VOC_PATH+'CONCEPT_RELATIONSHIP.csv', sep="\t")
+        if vocabulary_id:
+            self.concept = self.concept[self.concept['vocabulary_id']==vocabulary_id]
 
     def search_for_concept_by_name(self, search_value_string, domain_id=None, standard_concept='S'):
         """

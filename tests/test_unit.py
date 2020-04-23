@@ -1,6 +1,7 @@
 import pandas as pd
 import dask.dataframe as dd
 import pytest
+import os
 
 from rwd_analytics.cohort import CohortBuilder, get_distribution, Cohort
 from rwd_analytics.treatment_line import EraCalculation, last_activity_date, line_generation_preprocess, LinesOfTherapy, LineName, agg_lot_by_patient

@@ -7,3 +7,4 @@ __pycache__/
 .vscode
 */.ipynb_checkpoints/*
 /resources/omop_voc/*
+rwd_analytics/conf/.env
