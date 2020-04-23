@@ -80,6 +80,26 @@ class ConceptRelationship():
     def __init__(self):
         self.concept_relationship = dd.read_csv(OMOP_VOC_PATH+'CONCEPT_RELATIONSHIP.csv', sep="\t")
 
+    def get_standard(self, concept_ids):
+        """
+        Return a list of standard concept IDs
+        Parameters:
+            - concept_ids is a list of standards or non standard concept IDS
+        """
+        df = self.concept_relationship[self.concept_relationship['concept_id_1'].isin(concept_ids)]
+        df = df[(df['relationship_id'] == 'Maps to') & (df['invalid_reason'].isnull())]
+        return df.concept_id_2.unique().compute().tolist()
+
+    def get_non_standard(self, concept_ids):
+        """
+        Return a list of non-standard concept IDs
+        Parameters:
+            - concept_ids is a list of standards concept IDS
+        """
+        df = self.concept_relationship[self.concept_relationship['concept_id_1'].isin(concept_ids)]
+        df = df[(df['relationship_id'] == 'Maps from') & (df['invalid_reason'].isnull())]
+        return df.concept_id_2.unique().compute().tolist()
+
     def __call__(self, concept_ids):
         tmp = self.concept_relationship[self.concept_relationship['concept_id_1'].isin(concept_ids)]
         return tmp.compute()

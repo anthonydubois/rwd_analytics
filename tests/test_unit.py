@@ -154,7 +154,7 @@ class TestCohortBuilder():
             'measurement':measurement
         }
         output=get_distribution(omop_tables, [1510703, 1125315], '2017-12-09',
-                                '2017-12-11', level='standard', cohort=None)
+                                '2017-12-11', cohort=None)
         expected = pd.DataFrame({
             'concept_id':[1125315, 1510703],
             'concept_code':['161', '2047647'],
@@ -189,18 +189,20 @@ class TestCohortBuilder():
             'observation_period':observation_period,
             'measurement':measurement
         }
-        output = get_distribution(omop_tables, [1510703, 1125315], start_date=None,
-                                end_date=None, level='source', cohort=None)
+        concept_ids_ingredients = [1510703, 1125315]
+        concept_ids = Descendants()(concept_ids_ingredients)
+        output = get_distribution(omop_tables, concept_ids, start_date=None,
+                                end_date=None, cohort=None)
         expected = pd.DataFrame({
             'concept_id':[1125315, 1510703],
             'concept_code':['161', '2047647'],
             'vocabulary_id':['RxNorm']*2,
             'concept_name':['Acetaminophen', 'Helleborus extract'],
-            'n_unique_patients':[2, 2],
-            'n_records':[3, 2]
+            'n_unique_patients':[2, 1],
+            'n_records':[2, 1]
         })
         pd.testing.assert_frame_equal(output, expected)
-
+        
     def test_distribution_cohort_filter(self):
         drug_exposure = pd.DataFrame({
             'person_id':[1, 1, 1, 1, 2, 2],
@@ -229,8 +231,7 @@ class TestCohortBuilder():
             'person_id':[1],
             'index_date':[pd.to_datetime('2016-01-01')]
         })
-        output = get_distribution(omop_tables, [1510703, 1125315], '2017-12-09',
-                                '2017-12-11', level='source', cohort=cohort)
+        output = get_distribution(omop_tables, [1510703, 1125315], cohort=cohort)
         expected = pd.DataFrame({
             'concept_id':[1125315, 1510703],
             'concept_code':['161', '2047647'],

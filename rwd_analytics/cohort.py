@@ -5,7 +5,7 @@ import seaborn as sns
 import math
 
 from matplotlib import pyplot as plt
-from rwd_analytics.lookups import Descendants, Concept
+from rwd_analytics.lookups import Descendants, Concept, ConceptRelationship
 
 
 class Cohort():
@@ -223,10 +223,10 @@ class CohortBuilder():
         return self.cohort[['person_id', 'index_date']]
     
 
-def get_distribution(omop_tables, concept_ids, start_date, end_date, level='source', cohort=None):
+def get_distribution(omop_tables, concept_ids, start_date=None, end_date=None, level='source', cohort=None):
     """
     parameters: - omop_tables
-                - concepts_ids: list of standard concept ids
+                - concepts_ids: list of standard or non standard concept ids
                 - start_date: format %Y-%m-%d
                 - end_date: format %Y-%m-%d
                 - level: 'source' or 'standard'
@@ -235,6 +235,7 @@ def get_distribution(omop_tables, concept_ids, start_date, end_date, level='sour
     concept = Concept()
     concept_info = concept(concept_ids)
     domain = concept_info.at[0, 'domain_id']
+    standard = concept_info.at[0, 'standard_concept']
     map_domain_to_table = {
         'Drug':'drug_exposure',
         'Condition':'condition_occurrence',
@@ -253,22 +254,37 @@ def get_distribution(omop_tables, concept_ids, start_date, end_date, level='sour
         'procedure_datetime':'start_date'
     })
     if cohort is not None:
-        df = df.loc[df.index.isin(cohort.person_id.tolist())]
-        
+        subjects = cohort.person_id.tolist()
+        try:
+            df = df.loc[subjects].compute()
+        except:
+            df = df.loc[df.index.isin(subjects)].compute()
+    
+    if standard == 'S':
+        concept_id_level = 'concept_id'
+        concept_ids = Descendants()(concept_ids)
+    else:
+        concept_id_level = 'source_concept_id'
+        concept_ids = ConceptRelationship().get_non_standard(concept_ids)
+
+    df = df[df[concept_id_level].isin(concept_ids)]
+
     if level == 'source':
         concept_id_level = 'source_concept_id'
     elif level == 'standard':
         concept_id_level = 'concept_id'
-        concept_ids = Descendants()(concept_ids)
     else:
         return 'Could not determined level parameters'    
         
-    df = df[df[concept_id_level].isin(concept_ids)]
     if start_date:
         df = df[df['start_date']>=pd.to_datetime(start_date)]
     if end_date:
         df = df[df['start_date']<=pd.to_datetime(end_date)]
-    df = df.compute().reset_index()
+    
+    try:
+        df = df.compute().reset_index()
+    except:
+        df = df.reset_index()
     
     df = df.groupby(concept_id_level).agg({'person_id':['count', pd.Series.nunique]})
     df.columns = df.columns.droplevel()
