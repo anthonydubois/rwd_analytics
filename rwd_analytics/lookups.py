@@ -79,12 +79,20 @@ class Ingredient():
         return df
 
 
+class ConceptAncestor():
+    def __init__(self):
+        self.concept_ancestor = dd.read_csv(OMOP_VOC_PATH+'CONCEPT_ANCESTOR.csv', sep="\t")
+
 class ConceptRelationship():
-    def __init__(self, concept_id_1=None):
+    def __init__(self, concept_id_1=None, relationship_id=None):
         self.concept_relationship = dd.read_csv(OMOP_VOC_PATH+'CONCEPT_RELATIONSHIP.csv', sep="\t")
         if concept_id_1:
             self.concept_relationship = \
                 self.concept_relationship[self.concept_relationship['concept_id_1'].isin(concept_id_1)]
+        
+        if relationship_id:
+            self.concept_relationship = \
+                self.concept_relationship[self.concept_relationship['relationship_id']==relationship_id]
 
     def get_standard(self, concept_ids):
         """

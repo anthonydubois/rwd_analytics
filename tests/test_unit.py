@@ -251,11 +251,7 @@ class TestCohortBuilder():
                 'gender_concept_id':[8507]
             },
             'criteria_list':[
-            ],
-            'observation_period_criteria':{
-                'before_index':None,
-                'after_index':None
-            }
+            ]
         }
         output = CohortBuilder(cohort_definition, omop_tables)()
         output = output.reset_index(drop=True)
@@ -271,23 +267,10 @@ class TestCohortBuilder():
         
     def test_condition(self):
         cohort_definition = {
-            'demographic_criteria':{
-                'min_year_of_birth':None,
-                'max_year_of_birth':None,
-                'gender_concept_id':None
-            },
             'criteria_list':[
                 {
                     'concept_type':'condition_occurrence',
-                    'concept_id':[3],
-                    'is_excluded':0,
-                    'get_descendants':0,
-                    'occurrence_start_date':None,
-                    'occurrence_end_date':None,
-                    'min_occurrence':None,
-                    'min_duration':None,
-                    'is_before_previous_criteria':None,
-                    'is_after_previous_criteria':None
+                    'concept_id':[3]
                 }
             ],
             'observation_period_criteria':{
@@ -348,11 +331,7 @@ class TestCohortBuilder():
                 'gender_concept_id':None
             },
             'criteria_list':[
-            ],
-            'observation_period_criteria':{
-                'before_index':None,
-                'after_index':None
-            }
+            ]
         }
         output = CohortBuilder(cohort_definition, omop_tables)()
         output = output.reset_index(drop=True)

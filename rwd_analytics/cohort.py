@@ -69,9 +69,8 @@ class CohortBuilder():
             self.cohort = cohort
 
     def __call__(self):
-        demographic_criteria = self.cohort_definition['demographic_criteria']
-        notnone = {k:v for k, v in demographic_criteria.items() if v is not None}
-        if len(notnone) != 0:
+        demographic_criteria = self.cohort_definition.setdefault('demographic_criteria', None)
+        if demographic_criteria:
             if len(self.cohort) == 0:
                 tmp = self.person
             else:
@@ -82,11 +81,11 @@ class CohortBuilder():
                     print('Some patients do not have demographic information and will be removed')
                     tmp = self.person.loc[self.person.index.isin(subjects)].compute()
             
-            if demographic_criteria['min_year_of_birth']:
+            if demographic_criteria.setdefault('min_year_of_birth', None):
                 tmp = tmp[tmp['year_of_birth'] >= demographic_criteria['min_year_of_birth']]
-            if demographic_criteria['max_year_of_birth']:
+            if demographic_criteria.setdefault('max_year_of_birth', None):
                 tmp = tmp[tmp['year_of_birth'] <= demographic_criteria['max_year_of_birth']]
-            if demographic_criteria['gender_concept_id']:
+            if demographic_criteria.setdefault('gender_concept_id', None):
                 tmp = tmp[tmp['gender_concept_id'].isin(demographic_criteria['gender_concept_id'])]
 
             try: 
@@ -96,10 +95,16 @@ class CohortBuilder():
             self.cohort['index_date'] = pd.to_datetime('1970-01-01')
 
         for criteria in self.cohort_definition['criteria_list']:
-            try:
-                criteria['mapped']
-            except:
-                criteria['mapped'] = 0
+            criteria.setdefault('is_excluded', 0)
+            criteria.setdefault('get_descendants', 0)
+            criteria.setdefault('mapped', None)
+            criteria.setdefault('occurrence_start_date', None)
+            criteria.setdefault('occurrence_end_date', None)
+            criteria.setdefault('min_occurrence', None)
+            criteria.setdefault('min_duration', None)
+            criteria.setdefault('is_before_previous_criteria', None)
+            criteria.setdefault('is_after_previous_criteria', None)
+
             tmp = self.omop_tables[criteria['concept_type']]
             tmp = tmp.rename(columns={
                 'condition_concept_id':'concept_id',
@@ -201,22 +206,24 @@ class CohortBuilder():
                 print('Number of patients: '+str(len_cohort))
                 print('*****************')
         
-        obs_period_criteria = self.cohort_definition['observation_period_criteria']        
-        notnone = {k:v for k, v in obs_period_criteria.items() if v is not None}
-        if len(notnone) != 0:
+        obs_period_criteria = self.cohort_definition.setdefault('observation_period_criteria', None)
+        if obs_period_criteria:
             subject = self.cohort.person_id.unique().tolist()
-            self.obs_period = self.obs_period.loc[subject].compute().reset_index()
+            try:
+                self.obs_period = self.obs_period.loc[subject].compute().reset_index()
+            except:
+                self.obs_period = self.obs_period.loc[self.obs_period.index.isin(subject)].compute().reset_index()
             self.cohort = self.cohort.merge(self.obs_period, how='left', on='person_id')
             self.cohort['obs_before_index'] = (self.cohort['index_date'] \
                 - self.cohort['observation_period_start_date']).dt.days
             self.cohort['obs_after_index'] = (self.cohort['observation_period_end_date'] \
                 - self.cohort['index_date']).dt.days
             
-            if obs_period_criteria['before_index']:
+            if obs_period_criteria.setdefault('before_index', None):
                 self.cohort = self.cohort[self.cohort['obs_before_index'] \
                     >= obs_period_criteria['before_index']]
             
-            if obs_period_criteria['after_index']:
+            if obs_period_criteria.setdefault('after_index', None):
                 self.cohort = self.cohort[self.cohort['obs_after_index'] \
                     >= obs_period_criteria['after_index']]
         
