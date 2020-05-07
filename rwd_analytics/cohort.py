@@ -17,7 +17,7 @@ class Cohort():
     def demographics(self, show=False):
         df = self.omop_tables['person']
         try:
-            df = df.loc[subject].compute().reset_index()
+            df = df.loc[self.subject].compute().reset_index()
         except:
             df = df.loc[df.index.isin(self.subject)].compute().reset_index()
 
@@ -28,22 +28,22 @@ class Cohort():
         df = df[~df['year_of_birth'].isna()]
         df['age_at_index'] = df['index_date'].dt.year - df['year_of_birth']
         demo['age_at_index'] = df.age_at_index.value_counts().to_frame('count') \
-                    .reset_index().rename(columns={'index':'age_at_index'})
+            .reset_index().rename(columns={'index':'age_at_index'})
 
-        #Getting gender information
+        # Getting gender information
         gender_map = {
-            8532:'Female',
-            8507:'Male'
+            8532: 'Female',
+            8507: 'Male'
         }
         df['gender_concept_id'] = df['gender_concept_id'].map(gender_map)
         demo['gender_concept_id'] = df.gender_concept_id.value_counts().to_frame('count') \
-                    .reset_index().rename(columns={'index':'gender_concept_id'})
-        
-        #Getting incidence information
+            .reset_index().rename(columns={'index': 'gender_concept_id'})
+
+        # Getting incidence information
         demo['index_date'] = df.index_date.dt.year.value_counts().to_frame('count') \
-                    .reset_index().rename(columns={'index':'index_date'})
-        
-        if show == True:
+            .reset_index().rename(columns={'index': 'index_date'})
+
+        if show:
             f, axes = plt.subplots(1, 3, figsize=(13, 5))
             sns.set(style="whitegrid")
             sns.barplot(x="index_date", y="count", data=demo['index_date'], ax=axes[0])
@@ -134,7 +134,6 @@ class CohortBuilder():
                         concept_ids = self.descendants(concept_ids)
                     tmp = tmp[tmp['concept_id'].isin(concept_ids)]
 
-            
             # Filtering by date
             if criteria['occurrence_start_date']:
                 print('Criteria: start after '+str(criteria['occurrence_start_date']))
@@ -267,31 +266,31 @@ def get_distribution(omop_tables, concept_ids, start_date=None, end_date=None, c
             df = df.loc[subjects].compute()
         except:
             df = df.loc[df.index.isin(subjects)].compute()
-    
+
     if standard == 'S':
         concept_id_level = 'concept_id'
     else:
         concept_id_level = 'source_concept_id'
 
-    df = df[df[concept_id_level].isin(concept_ids)]   
-        
+    df = df[df[concept_id_level].isin(concept_ids)]
+
     if start_date:
-        df = df[df['start_date']>=pd.to_datetime(start_date)]
+        df = df[df['start_date'] >= pd.to_datetime(start_date)]
     if end_date:
-        df = df[df['start_date']<=pd.to_datetime(end_date)]
-    
+        df = df[df['start_date'] <= pd.to_datetime(end_date)]
+
     try:
         df = df.compute().reset_index()
     except:
         df = df.reset_index()
-    
-    df = df.groupby(concept_id_level).agg({'person_id':['count', pd.Series.nunique]})
+
+    df = df.groupby(concept_id_level).agg({'person_id': ['count', pd.Series.nunique]})
     df.columns = df.columns.droplevel()
     df = df.reset_index()
     df = df.rename(columns={
-        concept_id_level:'concept_id',
-        'nunique':'n_unique_patients',
-        'count':'n_records'
+        concept_id_level: 'concept_id',
+        'nunique': 'n_unique_patients',
+        'count': 'n_records'
     })
     df = concept.get_info(df, ['concept_code', 'concept_name', 'vocabulary_id'])
     return df[['concept_id', 'concept_code', 'vocabulary_id',
@@ -300,7 +299,8 @@ def get_distribution(omop_tables, concept_ids, start_date=None, end_date=None, c
 
 class CohortCharacterization():
     def __init__(self, characterization_definition, cohort, omop_tables):
-        self.tables_for_characterization = ['drug_exposure', 'condition_occurrence', 'procedure_occurrence']
+        self.tables_for_characterization = ['drug_exposure', 'condition_occurrence',
+                                            'procedure_occurrence']
         self.characterization_table = {}
         for table in self.tables_for_characterization:
             tmp = omop_tables[table]
