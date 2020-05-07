@@ -436,51 +436,51 @@ class TestCohortBuilder():
         })
         drug_exposure = dd.from_pandas(drug_exposure, npartitions=1).set_index('person_id')
         cohort_definition = {
-            'demographic_criteria':{
-                'min_year_of_birth':None,
-                'max_year_of_birth':None,
-                'gender_concept_id':None
+            'demographic_criteria': {
+                'min_year_of_birth': None,
+                'max_year_of_birth': None,
+                'gender_concept_id': None
             },
-            'criteria_list':[
+            'criteria_list': [
                 {
-                    'concept_type':'drug_exposure',
-                    'concept_id':[10],
-                    'is_excluded':0,
-                    'get_descendants':0,
-                    'occurrence_start_date':None,
-                    'occurrence_end_date':None,
-                    'min_occurrence':2,
-                    'min_duration':None,
-                    'is_before_previous_criteria':None,
-                    'is_after_previous_criteria':None
+                    'concept_type': 'drug_exposure',
+                    'concept_id': [10],
+                    'is_excluded': 0,
+                    'get_descendants': 0,
+                    'occurrence_start_date': None,
+                    'occurrence_end_date': None,
+                    'min_occurrence': 2,
+                    'min_duration': None,
+                    'is_before_previous_criteria': None,
+                    'is_after_previous_criteria': None
                 }
             ],
             'observation_period_criteria':{
-                'before_index':None,
-                'after_index':None
+                'before_index': None,
+                'after_index': None
             }
         }
         omop_tables = {
-            'person':person,
-            'condition_occurrence':condition_occurrence,
-            'procedure_occurrence':procedure,
-            'drug_exposure':drug_exposure,
-            'visit_occurrence':visit_occurrence,
-            'observation_period':observation_period,
-            'measurement':measurement
+            'person': person,
+            'condition_occurrence': condition_occurrence,
+            'procedure_occurrence': procedure,
+            'drug_exposure': drug_exposure,
+            'visit_occurrence': visit_occurrence,
+            'observation_period': observation_period,
+            'measurement': measurement
         }
         output = CohortBuilder(cohort_definition, omop_tables)()
         expected = pd.DataFrame({
-            'person_id':[1],
-            'index_date':[pd.to_datetime('2017-12-10', format = '%Y-%m-%d')]
+            'person_id': [1],
+            'index_date': [pd.to_datetime('2017-12-10', format = '%Y-%m-%d')]
         })
         pd.testing.assert_frame_equal(output, expected)
 
     def test_condition_with_drug_before(self):
         condition_occurrence = pd.DataFrame({
-            'person_id':[1, 1, 1, 1, 2, 2],
-            'condition_concept_id':[44831230, 2, 3, 4, 44831230, 2],
-            'condition_start_datetime':[
+            'person_id': [1, 1, 1, 1, 2, 2],
+            'condition_concept_id': [44831230, 2, 3, 4, 44831230, 2],
+            'condition_start_datetime': [
                 pd.to_datetime('2018-12-10'),
                 pd.to_datetime('2017-12-10'),
                 pd.to_datetime('2017-12-10'),
@@ -490,9 +490,9 @@ class TestCohortBuilder():
             ]
         })
         drug_exposure = pd.DataFrame({
-            'person_id':[1, 1, 1, 1, 2, 2],
-            'drug_concept_id':[10, 20, 30, 40, 10, 20],
-            'drug_exposure_start_datetime':[
+            'person_id': [1, 1, 1, 1, 2, 2],
+            'drug_concept_id': [10, 20, 30, 40, 10, 20],
+            'drug_exposure_start_datetime': [
                 pd.to_datetime('2017-12-10'),
                 pd.to_datetime('2017-12-10'),
                 pd.to_datetime('2017-12-10'),
@@ -506,63 +506,63 @@ class TestCohortBuilder():
         
         cohort_definition = {
             'demographic_criteria':{
-                'min_year_of_birth':None,
-                'max_year_of_birth':None,
-                'gender_concept_id':None
+                'min_year_of_birth': None,
+                'max_year_of_birth': None,
+                'gender_concept_id': None
             },
             'criteria_list':[
                 {
-                    'concept_type':'condition_occurrence',
-                    'concept_id':[44831230],
-                    'is_excluded':0,
-                    'get_descendants':0,
-                    'occurrence_start_date':None,
-                    'occurrence_end_date':None,
-                    'min_occurrence':None,
-                    'min_duration':None,
-                    'is_before_previous_criteria':None,
-                    'is_after_previous_criteria':None
+                    'concept_type': 'condition_occurrence',
+                    'concept_id': [44831230],
+                    'is_excluded': 0,
+                    'get_descendants': 0,
+                    'occurrence_start_date': None,
+                    'occurrence_end_date': None,
+                    'min_occurrence': None,
+                    'min_duration': None,
+                    'is_before_previous_criteria': None,
+                    'is_after_previous_criteria': None
                 },
                 {
-                    'concept_type':'drug_exposure',
-                    'concept_id':[10],
-                    'is_excluded':0,
-                    'get_descendants':0,
-                    'occurrence_start_date':None,
-                    'occurrence_end_date':None,
-                    'min_occurrence':None,
-                    'min_duration':None,
-                    'is_before_previous_criteria':1,
-                    'is_after_previous_criteria':None
+                    'concept_type': 'drug_exposure',
+                    'concept_id': [10],
+                    'is_excluded': 0,
+                    'get_descendants': 0,
+                    'occurrence_start_date': None,
+                    'occurrence_end_date': None,
+                    'min_occurrence': None,
+                    'min_duration': None,
+                    'is_before_previous_criteria': 1,
+                    'is_after_previous_criteria': None
                 }
             ],
             'observation_period_criteria':{
-                'before_index':None,
-                'after_index':None
+                'before_index': None,
+                'after_index': None
             }
         }
 
         omop_tables = {
-            'person':person,
-            'condition_occurrence':condition_occurrence,
-            'procedure_occurrence':procedure,
-            'drug_exposure':drug_exposure,
-            'visit_occurrence':visit_occurrence,
-            'observation_period':observation_period,
-            'measurement':measurement
+            'person': person,
+            'condition_occurrence': condition_occurrence,
+            'procedure_occurrence': procedure,
+            'drug_exposure': drug_exposure,
+            'visit_occurrence': visit_occurrence,
+            'observation_period': observation_period,
+            'measurement': measurement
         }
         output = CohortBuilder(cohort_definition, omop_tables)()
         expected = pd.DataFrame({
-            'person_id':[1],
-            'index_date':[pd.to_datetime('2018-12-10')]
+            'person_id': [1],
+            'index_date': [pd.to_datetime('2018-12-10')]
         })
         pd.testing.assert_frame_equal(output, expected)
 
     def test_attributes_min_length(self):
         drug_exposure = pd.DataFrame({
-            'person_id':[1, 1, 1, 1, 2, 2],
-            'drug_concept_id':[10, 10, 30, 40, 10, 20],
-            'drug_exposure_start_datetime':[
+            'person_id': [1, 1, 1, 1, 2, 2],
+            'drug_concept_id': [10, 10, 30, 40, 10, 20],
+            'drug_exposure_start_datetime': [
                 pd.to_datetime('2018-12-10'),
                 pd.to_datetime('2017-12-10'),
                 pd.to_datetime('2017-12-10'),
@@ -574,22 +574,22 @@ class TestCohortBuilder():
         drug_exposure = dd.from_pandas(drug_exposure, npartitions=1).set_index('person_id')
         cohort_definition = {
             'demographic_criteria':{
-                'min_year_of_birth':None,
-                'max_year_of_birth':None,
-                'gender_concept_id':None
+                'min_year_of_birth': None,
+                'max_year_of_birth': None,
+                'gender_concept_id': None
             },
             'criteria_list':[
                 {
-                    'concept_type':'drug_exposure',
-                    'concept_id':[10],
-                    'is_excluded':0,
-                    'get_descendants':0,
-                    'occurrence_start_date':None,
-                    'occurrence_end_date':None,
-                    'min_occurrence':None,
-                    'min_duration':100,
-                    'is_before_previous_criteria':None,
-                    'is_after_previous_criteria':None
+                    'concept_type': 'drug_exposure',
+                    'concept_id': [10],
+                    'is_excluded': 0,
+                    'get_descendants': 0,
+                    'occurrence_start_date': None,
+                    'occurrence_end_date': None,
+                    'min_occurrence': None,
+                    'min_duration': 100,
+                    'is_before_previous_criteria': None,
+                    'is_after_previous_criteria': None
                 }
             ],
             'observation_period_criteria':{
