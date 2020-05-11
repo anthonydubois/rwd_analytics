@@ -1,6 +1,5 @@
 import pandas as pd
 import numpy as np
-import dask.dataframe as dd
 
 from sklearn.feature_selection import SelectKBest
 from sklearn.feature_selection import chi2
@@ -19,7 +18,6 @@ class FeaturesSelection():
         self.X = cohort
         self.subjects = self.X.person_id.unique().tolist()
         self.number_of_subjects = len(self.subjects)
-        
         self.features = features
         self.drug_exposure = omop_tables['drug_exposure']
         self.condition_occurrence = omop_tables['condition_occurrence']
