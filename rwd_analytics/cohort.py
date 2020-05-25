@@ -246,7 +246,7 @@ def get_distribution(omop_tables, concept_ids, start_date=None, end_date=None, c
         - cohort: optinal - can accelerate compute
     """
     concept = Concept()
-    concept_info = concept(concept_ids)
+    concept_info = concept(concept_ids=concept_ids).reset_index()
     domain = concept_info.at[0, 'domain_id']
     standard = concept_info.at[0, 'standard_concept']
     map_domain_to_table = {
@@ -266,27 +266,27 @@ def get_distribution(omop_tables, concept_ids, start_date=None, end_date=None, c
         'procedure_source_concept_id': 'source_concept_id',
         'procedure_datetime': 'start_date'
     })
-    if cohort is not None:
-        subjects = cohort.person_id.tolist()
-        df = df.loc[df.index.isin(subjects)].compute()
 
     if standard == 'S':
         concept_id_level = 'concept_id'
     else:
         concept_id_level = 'source_concept_id'
 
+    df = df[[concept_id_level, 'start_date']]
     df = df[df[concept_id_level].isin(concept_ids)]
+
+    if cohort is not None:
+        subjects = cohort.person_id.tolist()
+        df = df.loc[df.index.isin(subjects)].compute()
+    else:
+        df = df.compute()
 
     if start_date:
         df = df[df['start_date'] >= pd.to_datetime(start_date)]
     if end_date:
         df = df[df['start_date'] <= pd.to_datetime(end_date)]
 
-    try:
-        df = df.compute().reset_index()
-    except:
-        df = df.reset_index()
-
+    df = df.reset_index()
     df = df.groupby(concept_id_level).agg({'person_id': ['count', pd.Series.nunique]})
     df.columns = df.columns.droplevel()
     df = df.reset_index()
@@ -295,6 +295,7 @@ def get_distribution(omop_tables, concept_ids, start_date=None, end_date=None, c
         'nunique': 'n_unique_patients',
         'count': 'n_records'
     })
-    df = concept.get_info(df, ['concept_code', 'concept_name', 'vocabulary_id'])
+    concept = concept_info[['concept_id', 'concept_code', 'concept_name', 'vocabulary_id']]
+    df = df.merge(concept, how='left', on='concept_id')
     return df[['concept_id', 'concept_code', 'vocabulary_id',
                'concept_name', 'n_unique_patients', 'n_records']]

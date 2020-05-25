@@ -1,3 +1,5 @@
+import os
+
 import pandas as pd
 import dask.dataframe as dd
 
@@ -128,7 +130,21 @@ class ConceptRelationship():
 
 
 class Concept():
-    def __init__(self, vocabulary_id=None):
+    def __init__(self, vocabulary_id=None, usecols=None, is_valid=True):
+        """
+        Parameters:
+            - vocabulary_id is a list of vocubulary. Example: ['ICD9CM']
+            - usecols is a list of columns. Valid columns:
+                - concept_name
+                - domain_id
+                - vocabulary_id
+                - concept_class_id
+                - standard_concept
+                - concept_code
+                - valid_start_date
+                - valid_end_date
+                - invalid_reason
+        """
         self.concept = dd.read_csv(OMOP_VOC_PATH+'CONCEPT.csv', sep="\t",
                                    dtype={
                                        'standard_concept': 'object',
@@ -138,7 +154,11 @@ class Concept():
                                        })
         self.concept_relationship = dd.read_csv(OMOP_VOC_PATH+'CONCEPT_RELATIONSHIP.csv', sep="\t")
         if vocabulary_id:
-            self.concept = self.concept[self.concept['vocabulary_id'] == vocabulary_id]
+            self.concept = self.concept[self.concept['vocabulary_id'].isin(vocabulary_id)]
+        if is_valid:
+            self.concept = self.concept[self.concept['invalid_reason'].isna()]
+        if usecols:
+            self.concept = self.concept[usecols]
 
     def search_for_concept_by_name(self, search_value_string,
                                    domain_id=None, standard_concept='S'):
@@ -159,35 +179,6 @@ class Concept():
         c = self.concept[self.concept['concept_id'] == concept_id].reset_index().compute()
         return c.at[0, 'concept_name']
 
-    def get_info(self, df, columns):
-        """
-        - df is a dataframe
-        - columns is a list of columns.
-            Valid columns:
-            - concept_name
-            - domain_id
-            - vocabulary_id
-            - concept_class_id
-            - standard_concept
-            - concept_code
-            - valid_start_date
-            - valid_end_date
-            - invalid_reason
-        """
-        df = df.rename(columns={
-            'condition_concept_id': 'concept_id',
-            'drug_concept_id': 'concept_id',
-            'measurement_concept_id': 'concept_id',
-            'observation_concept_id': 'concept_id',
-            'procedure_concept_id': 'concept_id'
-        })
-        concept_ids = df.concept_id.unique().tolist()
-        columns.append('concept_id')
-        temp = self.concept[columns]
-        temp = temp[temp['concept_id'].isin(concept_ids)]
-        temp = temp.compute()
-        return df.merge(temp[columns], how='left', on='concept_id')
-
     def get_concept_id(self, concept_code):
         df = self.concept[self.concept['concept_code'].isin(concept_code)]
         return df.concept_id.unique().compute().tolist()
@@ -197,11 +188,31 @@ class Concept():
         df = df[(df['relationship_id'] == 'Maps to') & (df['invalid_reason'].isnull())]
         return df.concept_id_2.unique().compute().tolist()
 
-    def __call__(self, concept_ids):
+    def __call__(self, concept_ids=None):
         """
         Returns all information about concept ids
 
         Parameters: - concept_ids: a list of concept_ids
         """
-        df = self.concept[self.concept['concept_id'].isin(concept_ids)]
-        return df.compute().reset_index()
+        if concept_ids:
+            self.concept = self.concept[self.concept['concept_id'].isin(concept_ids)]
+        return self.concept.compute()
+
+
+class DrugStrength():
+    def __init__(self, is_value=True, usecols=None):
+        df = pd.read_csv(os.path.join(OMOP_VOC_PATH, 'DRUG_STRENGTH.csv'), sep='\t')
+        if is_value:
+            df = df[df['invalid_reason'].isna()]
+        self.df = df
+
+        if usecols:
+            self.usecols = usecols
+        else:
+            self.usecols = ['drug_concept_id', 'ingredient_concept_id', 'amount_value',
+                            'amount_unit_concept_id', 'numerator_value',
+                            'numerator_unit_concept_id', 'denominator_value',
+                            'denominator_unit_concept_id', 'box_size']
+
+    def __call__(self):
+        return self.df[self.usecols]

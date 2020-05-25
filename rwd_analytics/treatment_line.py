@@ -1,5 +1,4 @@
 import pandas as pd
-import dask.dataframe as dd
 import numpy as np
 
 from rwd_analytics.lookups import Descendants, Concept,  Ingredient
@@ -9,16 +8,16 @@ def last_activity_date(cohort, omop_tables):
     subject = cohort.person_id.tolist()
     tables = []
     for table in [omop_tables['drug_exposure'], omop_tables['condition_occurrence']]:
-        table  = table.rename(columns = {
-            'condition_start_datetime':'start_date',
-            'drug_exposure_start_datetime':'start_date'
-        }) 
+        table = table.rename(columns={
+            'condition_start_datetime': 'start_date',
+            'drug_exposure_start_datetime': 'start_date'
+        })
         table = table.loc[table.index.isin(subject)]
         table = table[['start_date']]
         table = table.groupby('person_id').max().compute()
         table = table.reset_index()
         tables.append(table)
-    
+
     max_dates = pd.concat(tables)
     max_dates = max_dates.groupby('person_id').max()
     max_dates.columns = ['last_activity_date']
@@ -41,14 +40,14 @@ class EraCalculation():
 
     def __call__(self):
         if 'condition_concept_id' in self.table.columns:
-            self.table  = self.table.rename(columns = {
-                'condition_concept_id':'concept_id',
-                'condition_start_datetime':'start_date'
+            self.table = self.table.rename(columns={
+                'condition_concept_id': 'concept_id',
+                'condition_start_datetime': 'start_date'
             })
         elif 'drug_concept_id' in self.table.columns:
-            self.table  = self.table.rename(columns = {
-                'drug_concept_id':'concept_id',
-                'drug_exposure_start_datetime':'start_date'
+            self.table = self.table.rename(columns={
+                'drug_concept_id': 'concept_id',
+                'drug_exposure_start_datetime': 'start_date'
             })
 
         self.table = self.table.reset_index()
@@ -56,13 +55,13 @@ class EraCalculation():
 
         if self.concept_ids is not None:
             t = t[t['concept_id'].isin(self.concept_ids)]
-        
+
         t = t.compute()
         t['previous_start_date'] = t['start_date'].shift()
         t['gap_time'] = (t['start_date'] - t['previous_start_date']).dt.days
         t['previous_start_date'] = t['start_date'].shift()
         t['gap_time'] = (t['start_date'] - t['previous_start_date']).dt.days
-        t['gap'] = t['gap_time'].apply(lambda x:1 if x > 40 else 0)
+        t['gap'] = t['gap_time'].apply(lambda x: 1 if x > 40 else 0)
         era = t.groupby(['person_id', 'concept_id']).agg(
             start_date_min=pd.NamedAgg(column='start_date', aggfunc=min),
             start_date_max=pd.NamedAgg(column='start_date', aggfunc=max),
@@ -76,8 +75,8 @@ class EraCalculation():
 
 def era_statistics(era):
     era = era.groupby('concept_id').agg({
-        'count':['min', 'max', 'mean', 'std'],
-        'era_duration':['min', 'max', 'mean', 'std']
+        'count': ['min', 'max', 'mean', 'std'],
+        'era_duration': ['min', 'max', 'mean', 'std']
     })
     era = round(era, 2)
     return era
@@ -112,10 +111,10 @@ def is_in_line(drug_code, regimen_codes):
     levoleucovorin = 40168303
     """
     substitutes = {
-        955632:[955632, 1337620],
-        1337620:[955632, 1337620],
-        1388796:[1388796, 40168303],
-        40168303:[1388796, 40168303]
+        955632: [955632, 1337620],
+        1337620: [955632, 1337620],
+        1388796: [1388796, 40168303],
+        40168303: [1388796, 40168303]
     }
     if drug_code not in substitutes:
         substitutes[drug_code] = [drug_code]
@@ -136,15 +135,16 @@ class LinesOfTherapy():
     - drug_temp is a pandas dataframe
     - cohort is a pandas dataframe
     """
-    def __init__(self, drug_temp, cohort, ingredient_list, offset=14, nb_of_lines = 3):
-        drug_temp['drug_exposure_start_datetime'] = pd.to_datetime(drug_temp['drug_exposure_start_datetime'])
+    def __init__(self, drug_temp, cohort, ingredient_list, offset=14, nb_of_lines=3):
+        drug_temp['drug_exposure_start_datetime'] = pd.to_datetime(
+            drug_temp['drug_exposure_start_datetime'])
         cohort['index_date'] = pd.to_datetime(cohort['index_date'])
         self.drug_temp = drug_temp
         self.index_date = cohort
-        treatments_df = pd.DataFrame({'concept_id':ingredient_list})
-        self.concept_infos = Concept().get_info(treatments_df, ['concept_name'])
+        concepts = Concept(usecols=['concept_id', 'concept_name'])
+        self.concept_infos = concepts(concept_ids=ingredient_list)
         self.lines = self.__get_drugs(self.drug_temp, self.index_date, offset)
-        #self.lines = self.lines.persist()
+        # self.lines = self.lines.persist()
         self.lines['line_number'] = 0
         self.nb_of_lines = nb_of_lines
 
@@ -169,14 +169,16 @@ class LinesOfTherapy():
                 elif 1314924 in g:
                     return np.append(x[0], 1314924)
             return x[0]
-        
+
         df = df.reset_index()
-        start_line = df.groupby(['person_id'])['drug_exposure_start_datetime'].min().to_frame('start_date')
+        start_line = df.groupby(['person_id'])['drug_exposure_start_datetime'].min()
+        start_line = start_line.to_frame('start_date')
         df = df.merge(start_line, how='left', on='person_id')
         df['time_from_start'] = (df['drug_exposure_start_datetime'] - df['start_date']).dt.days
         for time_from_start in [28, 90]:
             regimen_codes = df[df['time_from_start'] <= time_from_start].groupby(
-                'person_id').drug_concept_id.unique().to_frame('regimen_codes_'+str(time_from_start))
+                'person_id').drug_concept_id.unique()
+            regimen_codes = regimen_codes.to_frame('regimen_codes_'+str(time_from_start))
             df = df.merge(regimen_codes, how='left', on='person_id')
         df['regimen_codes'] = df['regimen_codes_28']
         df['tmp'] = list(zip(df['regimen_codes_28'], df['regimen_codes_90']))
@@ -189,7 +191,7 @@ class LinesOfTherapy():
         df['line_number'] = line_number
         df['line_number'] = df['line_number'].astype(int)
         return df
-    
+
     def __add_end_date(self, lot, cohort_enhanced):
         lot = lot.sort_values(by=['person_id', 'start_date'])
         lot['flag_person'] = lot['person_id'].shift(-1)
@@ -198,44 +200,45 @@ class LinesOfTherapy():
         lot['end_date'] = lot['end_date'] - pd.to_timedelta(1, unit='D')
         lot = lot.merge(cohort_enhanced, how='left', on='person_id')
         del lot['index_date']
-        a = lot[lot['flag_person'] == True]
-        b = lot[lot['flag_person'] == False]
+        a = lot.loc[lot['flag_person']]
+        b = lot.loc[~lot['flag_person']]
         del a['last_activity_date']
         del b['end_date']
-        b = b.rename(columns={'last_activity_date':'end_date'})
+        b = b.rename(columns={'last_activity_date': 'end_date'})
         lot = pd.concat([a, b])
         del lot['flag_person']
         lot = lot.sort_values(by=['person_id', 'line_number'])
         lot['end_date'] = pd.to_datetime(lot['end_date'])
         return lot
-    
+
     def __call__(self):
         line_number = 1
         dfs = []
-        tmp = []
         lines = self.lines
-        
+
         while line_number != self.nb_of_lines+1:
-            #df = lines.map_partitions(self.__get_lines, line_number)
+            # df = lines.map_partitions(self.__get_lines, line_number)
             df = self.__get_lines(lines, line_number)
-            temp = df[df['is_in_line'] == True][['person_id', 'start_date', 'regimen_codes', 'line_number']]
-            lines = df[df['is_in_line'] == False][['person_id', 'drug_concept_id', 'drug_exposure_start_datetime']]
+            temp = df.loc[df['is_in_line']]
+            temp = temp[['person_id', 'start_date', 'regimen_codes', 'line_number']]
+            lines = df.loc[~df['is_in_line']]
+            lines = lines[['person_id', 'drug_concept_id', 'drug_exposure_start_datetime']]
             dfs.append(temp)
             if len(lines) == 0:
                 break
             line_number = line_number + 1
 
-        print('Maximum number of lines included: '+ str(line_number))
+        print('Maximum number of lines included: ' + str(line_number))
         lines_f = pd.concat(dfs)
         lines_f['regimen_codes'] = lines_f['regimen_codes'].astype(str)
         lines_f = lines_f.drop_duplicates()
         lines_f = self.__add_end_date(lines_f, self.index_date)
-        lines_f =  LineName(lines_f, self.concept_infos)()
+        lines_f = LineName(lines_f, self.concept_infos)()
         return lines_f[['person_id', 'line_number', 'regimen_name', 'start_date', 'end_date']]
 
 
-def listToString(s):  
-    str1 = ", " 
+def listToString(s):
+    str1 = ", "
     return (str1.join(s))
 
 
@@ -246,7 +249,8 @@ class LineName():
         lot_f["regimen_codes"] = lot_f.regimen_codes.str.replace("]", "")
 
         for index, row in concept_infos.iterrows():
-            lot_f["regimen_codes"] = lot_f.regimen_codes.str.replace(str(row['concept_id']), row['concept_name'])
+            lot_f["regimen_codes"] = lot_f.regimen_codes.str.replace(
+                str(row['concept_id']), row['concept_name'])
         self.lot = lot_f
 
     def __call__(self):
@@ -260,22 +264,22 @@ class LineName():
         del self.lot['regimen_codes']
         self.lot = self.lot.sort_values(by=['person_id', 'line_number'])
         self.lot['regimen_codes_sorted'] = self.lot['regimen_codes_sorted'].map(
-            lambda x:', '.join([l.strip() for l in x.split(',') if l.strip() != '']))
+            lambda x: ', '.join([l.strip() for l in x.split(',') if l.strip() != '']))
 
-        return self.lot.rename(columns={'regimen_codes_sorted':'regimen_name'})
-    
+        return self.lot.rename(columns={'regimen_codes_sorted': 'regimen_name'})
+
 
 def agg_lot_by_patient(lot):
-    lot1 = lot[lot['line_number']==1]
-    lot2 = lot[lot['line_number']==2]
-    lot3 = lot[lot['line_number']==3]
+    lot1 = lot[lot['line_number'] == 1]
+    lot2 = lot[lot['line_number'] == 2]
+    lot3 = lot[lot['line_number'] == 3]
     del lot1['line_number']
     del lot2['line_number']
     del lot3['line_number']
-    lot12 = lot1.merge(lot2, on = 'person_id', how= 'left')
-    lot123 = lot12.merge(lot3, on = 'person_id', how= 'left')
-    lot123['regimen_name_y']= lot123['regimen_name_y'].fillna('no 2L')
-    lot123['regimen_name']= lot123['regimen_name'].fillna('no 3L')
+    lot12 = lot1.merge(lot2, on='person_id', how='left')
+    lot123 = lot12.merge(lot3, on='person_id', how='left')
+    lot123['regimen_name_y'] = lot123['regimen_name_y'].fillna('no 2L')
+    lot123['regimen_name'] = lot123['regimen_name'].fillna('no 3L')
     lot123 = lot123.rename(columns={
         'regimen_name_x': 'regimen 1L',
         'regimen_name_y': 'regimen 2L',

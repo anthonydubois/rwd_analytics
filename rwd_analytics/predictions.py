@@ -1,7 +1,7 @@
 import pandas as pd
-import dask.dataframe as dd
 import numpy as np
-import math
+import torch
+import random
 
 # sudo docker-compose exec --user root  notebook bash
 # pip install -U scikit-learn
@@ -19,14 +19,30 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.neighbors import NearestNeighbors
 
 
-def get_matching_pairs(treated_df_input, non_treated_df_input, distance_max = 2.5, scaler=True):
+def check_for_na(df):
+    print(len(df))
+    df.isna().sum()
+    df.dropna()
+    print(len(df))
+    return df
+
+
+def set_seed(args):
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    if args.n_gpu > 0:
+        torch.cuda.manual_seed_all(args.seed)
+
+
+def get_matching_pairs(treated_df_input, non_treated_df_input, distance_max=2.5, scaler=True):
     treated_df = treated_df_input.copy()
     non_treated_df = non_treated_df_input.copy()
     del treated_df['person_id']
     del non_treated_df['person_id']
     treated_x = treated_df.values
     non_treated_x = non_treated_df.values
-    if scaler == True:
+    if scaler:
         scaler = StandardScaler()
     if scaler:
         scaler.fit(treated_x)
