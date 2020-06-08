@@ -67,7 +67,7 @@ def load_omop_table(dataset_path):
             'table': 'measurement',
             'isRequired': ['measurement_concept_id', 'measurement_datetime', 'unit_source_value',
                            'value_source_value', 'value_as_number', 'range_low', 'range_high',
-                           'measurement_type_concept_id'],
+                           'measurement_type_concept_id', 'measurement_source_value'],
             'isDatetime': ['measurement_datetime'],
             'isConceptId': ['measurement_concept_id', 'measurement_type_concept_id']
         },
