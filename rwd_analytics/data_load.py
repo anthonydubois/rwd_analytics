@@ -66,9 +66,10 @@ def load_omop_table(dataset_path):
         {
             'table': 'measurement',
             'isRequired': ['measurement_concept_id', 'measurement_datetime', 'unit_source_value',
-                           'value_source_value', 'value_as_number', 'range_low', 'range_high'],
+                           'value_source_value', 'value_as_number', 'range_low', 'range_high',
+                           'measurement_type_concept_id'],
             'isDatetime': ['measurement_datetime'],
-            'isConceptId': ['measurement_concept_id']
+            'isConceptId': ['measurement_concept_id', 'measurement_type_concept_id']
         },
         {
             'table': 'observation',
@@ -104,7 +105,7 @@ def load_omop_table(dataset_path):
         'measurement': omop_files_tmp[6],
         'observation': omop_files_tmp[7]
     }
-    print ('***********  Data successfully loaded  ***********')
+    print('***********  Data successfully loaded  ***********')
     return omop_tables
 
 
@@ -113,7 +114,7 @@ def data_extractor(cohort, data_path, output_path=None, output_format='csv'):
     This function extracts all records of all patients in a cohort.
     Parameters:
         - cohort: output of CohortBuilder()
-        - input_path: "raw data" or "omop" in parquet format 
+        - input_path: "raw data" or "omop" in parquet format
                 indexed on patient ID (ENROLID, PATIENT_ID, PERSON_ID, etc.)
         - output_path: where the files are being saved
         - output_format: 'csv', 'parquet'
@@ -138,12 +139,8 @@ def data_extractor(cohort, data_path, output_path=None, output_format='csv'):
             df = dd.read_parquet(data_path + table, engine='pyarrow')
         except:
             df = dd.read_parquet(data_path + table.upper(), engine='pyarrow')
-        
-        try:
-            # Much faster but does not always work
-            df = df.loc[subjects].compute()
-        except:
-            df = df.loc[df.index.isin(subjects)].compute()
+
+        df = df.loc[df.index.isin(subjects)].compute()
 
         if output_path is not None:
             if output_format == 'csv':
