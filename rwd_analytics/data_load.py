@@ -38,8 +38,8 @@ def load_omop_table(dataset_path):
         {
             'table': 'procedure_occurrence',
             'isRequired': ['procedure_concept_id', 'procedure_datetime',
-                           'procedure_source_value',
-                           'procedure_source_concept_id'],
+                           'procedure_source_value', 'procedure_source_concept_id',
+                           'visit_detail_id'],
             'isDatetime': ['procedure_datetime'],
             'isConceptId': ['procedure_concept_id',
                             'procedure_source_concept_id']
