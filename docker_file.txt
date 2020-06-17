@@ -1,0 +1,17 @@
+# Create synthetic patients
+git clone https://github.com/synthetichealth/synthea.git
+cd synthea
+./gradlew build check test
+./run_synthea # exporter.csv.export option in the ./src/main/resources/synthea.properties file needs to be set to TRUE
+
+# Transform Synthea data with 
+
+# Create OMOP V6 database
+# Install a Postgre database
+# Create an empty schema: synthetic_omop_v6
+# Execute : OMOP CDM postgresql ddl.txt (SQL code)
+# Execute : etl-synthea.R (R code)
+# Execute : OMOP CDM postgresql pk indexes.txt (SQL code)
+# Execute : OMOP CDM postgresql constraints.txt (SQL code)
+# Create an empty schema: results
+# Execute : OMOP CDM Results postgresql ddl.txt (SQL code)
