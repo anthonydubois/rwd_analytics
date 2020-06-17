@@ -199,13 +199,21 @@ class Concept():
         return self.concept.compute()
 
 
-def get_concept_infos(self, df, concept_id_name='concept_id', vocabulary_id=None):
+def get_concept_infos(df, concept_id_name='concept_id', vocabulary_id=None):
     """
     - df is a dataframe
     - concept_id_name is the name of the column in df with concept ids
     """
+    df = df.reset_index()  # in case person_id is in index
     concepts = Concept(vocabulary_id=vocabulary_id, usecols=['concept_id', 'concept_name'])()
-    return df.merge(concepts, how='left', left_on=concept_id_name, right_on='concept_id')
+    df = df.merge(concepts, how='left', left_on=concept_id_name, right_on='concept_id')
+    try:
+        del df['index']
+    except KeyError:
+        pass
+    if concept_id_name == 'concept_id':
+        del df['concept_id']
+    return df
 
 
 class DrugStrength():
